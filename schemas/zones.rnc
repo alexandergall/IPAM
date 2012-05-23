@@ -1,0 +1,10 @@
+start = zones
+
+zones = element zones {
+   attribute base { text },
+   element zone {
+      attribute name { text },
+      attribute directory { text },
+      empty
+   }*
+}

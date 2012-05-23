@@ -1,0 +1,54 @@
+datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
+namespace a = "http://relaxng.org/ns/compatibility/annotations/1.0"
+
+start = network
+
+network = element network {
+   attribute name { text },
+   attribute ttl { xsd:int }?,
+   attribute xml:base { text }?,
+   element location { text }?,
+   host*
+}*
+
+address = element address {
+   attribute ttl { xsd:int }?,
+   [ a:defaultValue = "true" ] attribute reverse-dns { xsd:boolean }?,
+   ( element ipv4 { 
+      attribute ttl { xsd:int }?,
+      attribute reverse-dns { xsd:boolean }?,
+      text }* &
+   element ipv6 { 
+      attribute ttl { xsd:int }?,
+      attribute reverse-dns { xsd:boolean }?,
+      ((attribute from-iid { xsd:boolean },
+         empty) |
+      text) }* )
+}
+
+rr = element rr {
+   attribute type { text },
+   attribute ttl { text }?,
+   text
+}
+
+host = element host {
+   attribute name { text },
+   attribute ttl { xsd:int }?,
+   [ a:defaultValue = "true" ] attribute dns { xsd:boolean }?,
+   [ a:defaultValue = "false" ] attribute noloc { xsd:boolean }?,
+   address,
+   (  
+      element alias {
+         attribute name { text },
+         attribute ttl { text }?
+      }* &
+      element secondary {
+         attribute name { text },
+         attribute ttl { text }?,
+         attribute af { 'ipv4' | 'ipv6' }?,
+         rr*
+      }* &
+      rr*
+   )
+}

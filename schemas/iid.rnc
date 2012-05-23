@@ -1,0 +1,8 @@
+start = interface-identifiers
+
+interface-identifiers = element interface-identifiers {
+   element iid {
+      attribute id { text },
+      attribute name { text }
+   }*
+}

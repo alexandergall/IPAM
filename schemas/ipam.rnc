@@ -1,0 +1,53 @@
+datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
+namespace xi = "http://www.w3.org/2001/XInclude"
+namespace a = "http://relaxng.org/ns/compatibility/annotations/1.0"
+
+start |= ipam-base
+
+## Using XInclude with partial validation in an editor (e.g. Emacs
+## nxml-mode) is a bit tricky.  The schema must expilicitely allow
+## <xi:include> tags but must also know about the complete grammar for
+## validation after XInclude has been performed.
+ipam-base = element ipam-base {
+   element domain { text },
+   element ttl { xsd:int }?,
+   (address-maps |
+      element xi:include {
+         attribute href { text },
+         empty
+      }),
+   (zones |
+      element xi:include {
+         attribute href { text },
+         empty
+      }),
+   (interface-identifiers |
+      element xi:include { 
+         attribute href { text },
+         empty 
+      }),
+   element networks {
+      (network+ |
+      element xi:include { 
+         attribute href { text },
+         empty 
+      }+)
+   }
+}
+
+## These grammars contain start elements of their own to make them
+## self-contained for partial validation in an editor.  The
+## redefinitions here effectively ignore these elements, leaving only
+## the real start element (ipam-base).
+include "address-maps.rnc" {
+   start |= notAllowed
+}
+include "zones.rnc" {
+   start |= notAllowed
+}
+include "iid.rnc" {
+   start |= notAllowed
+}
+include "networks/network.rnc" {
+   start |= notAllowed
+}
