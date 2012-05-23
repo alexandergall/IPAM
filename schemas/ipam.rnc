@@ -48,6 +48,6 @@ include "zones.rnc" {
 include "iid.rnc" {
    start |= notAllowed
 }
-include "networks/network.rnc" {
+include "network.rnc" {
    start |= notAllowed
 }
