@@ -37,6 +37,7 @@ host = element host {
    attribute ttl { xsd:int }?,
    [ a:defaultValue = "true" ] attribute dns { xsd:boolean }?,
    [ a:defaultValue = "false" ] attribute noloc { xsd:boolean }?,
+   element comment { text }?,
    address,
    (  
       element alias {
