@@ -11,7 +11,7 @@ start |= ipam-base
 ipam-base = element ipam-base {
    element domain { text },
    element ttl { xsd:int }?,
-   (address-maps |
+   (address-map |
       element xi:include {
          attribute href { text },
          empty
@@ -39,7 +39,7 @@ ipam-base = element ipam-base {
 ## self-contained for partial validation in an editor.  The
 ## redefinitions here effectively ignore these elements, leaving only
 ## the real start element (ipam-base).
-include "address-maps.rnc" {
+include "address-map.rnc" {
    start |= notAllowed
 }
 include "zones.rnc" {
