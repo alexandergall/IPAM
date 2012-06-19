@@ -9,27 +9,39 @@ network = element network {
    attribute xml:base { text }?,
    element location { text }?,
    host*
-}*
+}
 
 address = element address {
    attribute ttl { xsd:int }?,
+   [ a:defaultValue = "true" ] attribute canonical-name { xsd:boolean }?,
    [ a:defaultValue = "true" ] attribute reverse-dns { xsd:boolean }?,
-   ( element ipv4 { 
-      attribute ttl { xsd:int }?,
-      attribute reverse-dns { xsd:boolean }?,
-      text }* &
-   element ipv6 { 
-      attribute ttl { xsd:int }?,
-      attribute reverse-dns { xsd:boolean }?,
-      ((attribute from-iid { xsd:boolean },
-         empty) |
-      text) }* )
-}
-
-rr = element rr {
-   attribute type { text },
-   attribute ttl { text }?,
-   text
+   ( 
+      element a {
+         attribute ttl { xsd:int }?,
+         attribute canonical-name { xsd:boolean }?,
+         attribute reverse-dns { xsd:boolean }?,
+         element ipv4 { 
+            attribute canonical-name { xsd:boolean }?,
+            attribute reverse-dns { xsd:boolean }?,
+            text 
+         }+ 
+      }? &
+      element aaaa {
+         attribute ttl { xsd:int }?,
+         attribute canonical-name { xsd:boolean }?,
+         attribute reverse-dns { xsd:boolean }?,
+         element ipv6 { 
+            attribute canonical-name { xsd:boolean }?,
+            attribute reverse-dns { xsd:boolean }?,
+            (
+               ( attribute from-iid { xsd:boolean },
+                  empty
+               ) |
+               text
+            ) 
+         }+ 
+      }? 
+   )
 }
 
 host = element host {
@@ -42,14 +54,16 @@ host = element host {
    (  
       element alias {
          attribute name { text },
-         attribute ttl { text }?
+         attribute ttl { xsd:int }?
       }* &
-      element secondary {
+      element hosted-on {
          attribute name { text },
-         attribute ttl { text }?,
-         attribute af { 'ipv4' | 'ipv6' }?,
-         rr*
+         attribute ttl { xsd:int }?
       }* &
-      rr*
+      element rr {
+         attribute type { text },
+         attribute ttl { xsd:int }?,
+         text
+      }*
    )
 }
