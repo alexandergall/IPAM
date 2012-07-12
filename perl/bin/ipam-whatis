@@ -1,0 +1,226 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use lib './lib/perl5';
+use IPAM;
+use NetAddr::IP;
+use Getopt::Long;
+use Carp qw/longmess cluck confess/;
+#local $SIG{__DIE__} = \&Carp::confess;
+
+my %opt = ( 'default-domain' => 'switch.ch.' , recurse => 0);
+my $indent_unit = 2;
+my %af_to_name = ( 4 => 'IPv4', 6 => 'IPv6' );
+my (%visited_fqdns, %visited_prefixes);
+
+sub usage() {
+  print <<"EOF";
+usage: $0 [--default-domain=<domain>] [--detail [--recurse=<level>]]] <fqdn> | <address> | <prefix> ...
+EOF
+exit(1);
+}
+
+sub name_info($$);
+sub prefix_info($$);
+sub indent($$);
+sub show_address_block($$);
+sub show_host($$);
+
+GetOptions(\%opt, "defaul-domain=s", "detail", "recurse=i") or usage();
+@ARGV >= 1 or usage();
+$opt{recurse}++;
+$opt{recurse} < 0 and $opt{recurse} = 0;
+my $file = 'ipam.xml';
+my $ipam = IPAM->new({ verbose => 0 });
+$ipam->load($file);
+
+foreach my $item (@ARGV) {
+  if ($item =~ /(\d+\.\d+\.\d+\.\d+|:|\/)/) {
+    my $ip = NetAddr::IP->new($item) or die "Malformed address $item";
+    prefix_info($ip, 0);
+  } else {
+    name_info($item, 0);
+  }
+  print "\n";
+}
+
+sub name_info($$) {
+  my ($fqdn, $indent) = @_;
+  my $recurse_save = $opt{recurse};
+  $opt{recurse}--;
+  $opt{recurse} < 0 and $opt{recurse} = 0;
+  $fqdn .= '.'.$opt{'default-domain'} unless $fqdn =~ /\.$/;
+  unless (exists $visited_fqdns{$fqdn}) {
+    $visited_fqdns{$fqdn} = 1;
+    indent($indent++, "The domain name $fqdn\n");
+    my $info = $ipam->nameinfo($fqdn);
+    if ($info->{block}) {
+      foreach my $prefix (@{$info->{block}}) {
+	next if $prefix->is_stub();
+	indent($indent, "Is an address block that defines the prefix "
+	       .$prefix->name()."\n");
+	show_address_block($prefix, $indent+1);
+      }
+    }
+    if ($info->{iid}) {
+      my $iid = $info->{iid};
+      indent($indent, "Is the IPv6 interface-identifier "
+	     .$iid->ip()->addr()."\n");
+      $opt{detail} and defined_at($iid, $indent+1);
+    }
+    if ($info->{zone}) {
+      my $zone = $info->{zone};
+      indent($indent, "Is a DNS zone\n");
+      $opt{detail} and defined_at($zone, $indent+1);
+    }
+    if ($info->{network}) {
+      my $network = $info->{network};
+      indent($indent, "Is a stub network with the prefix(es) "
+	     .join(', ', map { $_->name() } $network->prefixes()).".\n");
+      $opt{detail} and defined_at($network, $indent);
+      $opt{recurse} and
+	print_pf_registry($network->prefix_registry(), $indent, undef);
+    }
+    if ($info->{host}) {
+      foreach my $host (@{$info->{host}}) {
+	indent($indent, "Is a host that belongs to the network "
+	       .$host->network()->name()."\n");
+	show_host($host, $indent+1);
+      }
+    }
+    if ($info->{alias}) {
+      foreach my $alias (@{$info->{alias}}) {
+	indent($indent, "Is an alias for the host "
+	       .$alias->host()->name() ."\n");
+	$opt{detail} and defined_at($alias, $indent+1);
+	$opt{recurse} and name_info($alias->host()->name(), $indent+1);
+      }
+    }
+    my ($zone, $rel_name) = $ipam->registry(IPAM::REG_ZONE)->lookup_fqdn($fqdn);
+    if ($zone) {
+      if (my $domain = $zone->lookup_domain($rel_name)) {
+	indent($indent, "Owns the following DNS records in the zone "
+	       .$zone->name()."\n");
+	$domain->print(\*STDOUT, ($indent+1)*$indent_unit);
+      } else {
+	indent($indent, "Belongs to the zone ".$zone->name()
+	       .", but there are no DNS records associated with it.\n");
+      }
+    } else {
+      indent($indent, "Does not belong to any of the configured zones.\n")
+    }
+  }
+  $opt{recurse} = $recurse_save;
+}
+
+sub prefix_info($$) {
+  my ($ip, $indent) = @_;
+  my $recurse_save = $opt{recurse};
+  $opt{recurse}--;
+  $opt{recurse} < 0 and $opt{recurse} = 0;
+  unless (exists $visited_prefixes{$ip->addr()}) {
+    $visited_prefixes{$ip->addr()} = 1;
+    my $type = $ip->bits() == $ip->masklen() ? 'address' : 'prefix';
+    my ($prefix, @path) =
+      $ipam->address_map()->lookup_by_ip($ip);
+    unless ($prefix or @path) {
+      print "The database contains no information about the $type $ip\n";
+    } else {
+      if ($prefix) {
+	if (my $network = $prefix->network()) {
+	  indent($indent, $prefix->name()." is assigned to the stub network "
+		 .$network->name()."\n");
+	  show_address_block($prefix, $indent+1);
+	} elsif ($prefix->isa('IPAM::Address')) {
+	  indent($indent, $prefix->name()." is an address.\n");
+	  if (my $canonical_host = $prefix->canonical_host()) {
+	    indent($indent+1, "It has the canonical name ".
+		   $canonical_host->name()."\n");
+	  } else {
+	    indent($indent+1, "It has no canonical name.\n");
+	  }
+	  map { indent($indent+1, "It is assigned to the host ".$_->name()."\n");
+		show_host($_, $indent+2) } $prefix->hosts();
+	} else {
+	  indent($indent, $prefix->name()." is assigned to the address block "
+		 .$prefix->id()."\n");
+	  show_address_block($prefix, $indent+1);
+	}
+      } else {
+	indent($indent, "There is no exact match for the $type $ip\n");
+      }
+      if (@path) {
+	$indent += 1;
+	indent($indent++, "It is contained in a branch of the address map\n");
+	foreach my $element (@path) {
+	  indent($indent++, sprintf "%-20s  %s\n", $element->name(),
+		 $element->id());
+	}
+      }
+    }
+  }
+  $opt{recurse} = $recurse_save;
+}
+
+sub indent($$) {
+  my ($level, $msg) = @_;
+  print ' 'x($level*$indent_unit).$msg;
+}
+
+sub defined_at($$) {
+  my ($obj, $indent) = @_;
+  my ($file, $line) = $obj->nodeinfo();
+  indent($indent, "It is defined at $file, line $line\n");
+}
+
+sub print_pf_registry($$$);
+sub print_pf_registry($$$) {
+  my ($reg, $indent, $af) = @_;
+  my $recurse_save = $opt{recurse};
+  $opt{recurse}--;
+  $opt{recurse} < 0 and $opt{recurse} = 0;
+  my $next = $reg->iterator(sub { my ($a, $b) = @_; $b->ip() cmp $a->ip(); },
+			    $af);
+  while (my $prefix = $next->()) {
+    indent($indent, sprintf("%-35s  %s\n", $prefix->name(), $prefix->id()));
+    if ($prefix->isa('IPAM::Address') and $opt{recurse}) {
+      name_info($prefix->id(), $indent+1);
+    } else {
+      $opt{recurse} and
+	print_pf_registry($prefix->registry(), $indent+1, $prefix->af());
+    }
+  }
+  $opt{recurse} = $recurse_save;
+}
+
+sub show_address_block($$) {
+  my ($prefix, $indent) = @_;
+  $opt{detail} and defined_at($prefix, $indent);
+  $opt{recurse} and
+    print_pf_registry($prefix->registry(), $indent, $prefix->af());
+}
+
+sub show_host($$) {
+  my ($host, $indent) = @_;
+  return unless $opt{detail};
+  defined_at($host, $indent);
+  foreach my $address ($host->addresses()) {
+    my $canonical_host = $address->canonical_host();
+    indent($indent, "It is ".
+	   ((defined $canonical_host and $canonical_host == $host) ?
+	    'the canonical' : 'a')." name for the address "
+	   .$address->name()."\n");
+    $opt{recurse} and prefix_info($address->ip(), $indent+1);
+  }
+  map { indent($indent, $_->name()." is an alias for the host.\n");
+	$opt{recurse} and name_info($_->name(), $indent+1); }
+    $host->aliases();
+  map { indent($indent, "It is hosted on ".$_->name()."\n");
+	$opt{recurse} and name_info($_->name(), $indent+1); }
+    $host->hosted_on();
+}
+
+## Local Variables:
+## mode: CPerl
+## End:

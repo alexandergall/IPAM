@@ -1,0 +1,273 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use lib './lib/perl5';
+## The recursive filler() routine can trigger "deep recursion"
+## warnings if a block is large and sparsely populated.
+## One can force aggregation with the "--agregate" option
+## to avoid problems with this (in particular with large
+## IPv6 blocks).
+no warnings "recursion";
+use IPAM;
+use NetAddr::IP;
+use Math::BigInt;
+use Math::BigFloat;
+use Getopt::Long;
+
+my %opt = ( 'default-domain' => 'switch.ch.', stats => 'none',
+	  threshold => 0);
+my %af = ( '4' =>
+	   { bits => 32,
+	     nibbles => 8,
+	     ntoa => \&NetAddr::IP::Util::inet_ntoa,
+	     modulus => Math::BigInt->new(2)->bpow(32) },
+	   '6' =>
+	   { bits => 128,
+	     nibbles => 32,
+	     ntoa => \&NetAddr::IP::Util::ipv6_n2x,
+	     modulus => Math::BigInt->new(2)->bpow(128) }
+	 );
+my %stat_modes = ( 'none' => 1,
+		   'stub' => 1,
+		   'all' => 1,
+		 );
+my $indent_unit = 2;
+
+sub do_block($$);
+sub sizeof($);
+sub indent($$);
+sub next_block($);
+sub filler($$$);
+sub msb($);
+sub lsb($);
+sub ip_to_bigint($);
+sub bigint_to_ip($$$);
+
+sub usage() {
+  print <<"EOF";
+usage: $0 [--all] [--aggregate] [--stats=none|stub|all] [--recurse] <stub-net> | <netblock>
+EOF
+exit(1);
+}
+
+GetOptions(\%opt, "defaul-domain=s", "all", "aggregate",
+	   "stats=s", "threshold=i", "recurse") or usage();
+@ARGV == 1 or usage();
+exists $stat_modes{$opt{stats}} or usage();
+my $file = 'ipam.xml';
+my $ipam = IPAM->new({ verbose => 0 });
+$ipam->load($file);
+my $fqdn = $ARGV[0];
+$fqdn .= '.'.$opt{'default-domain'} unless $fqdn =~ /\.$/;
+
+if  ($ARGV[0] =~ /(\d+\.\d+\.\d+\.\d+|:|\/)/) {
+  my $ip = NetAddr::IP->new($ARGV[0]) or die "Malformed address ".$ARGV[0];
+  $ip->masklen() < $ip->bits() or die "Network prefix expected ("
+    .$ip->cidr()." is an address)";
+  if (my $prefix =
+      $ipam->address_map()->lookup_by_ip($ip)) {
+    do_block($prefix, 0);
+  } else {
+    die "No matching block or stub-net found for ".$ip->cidr();
+  }
+} else {
+  my $fqdn = $ARGV[0];
+  $fqdn .= '.'.$opt{'default-domain'} unless $fqdn =~ /\.$/;
+  if (my @prefixes =
+      $ipam->address_map()->lookup_by_id($fqdn)) {
+    map { do_block($_, 0) } @prefixes;
+  } else {
+    die "No matching block or stub-net found for $fqdn";
+  }
+}
+
+### Recursively process an address block.  In stats mode, the following
+### statistics are collected.
+###   block_allocated
+###     The number of addresses covered by all sub-blocks.  This does
+###     not depend on allocations made in sub-blocks.
+###   addrs_assigned
+###     In recursion mode and for IPv4 only, this is the number of
+###     addresses covered by prefixes that are assigned to stub-nets.
+###     This includes *all* addresses, in particular network and broadcast
+###     addresses
+###   addrs_free
+###     This is the number of unassigned addresses within the assigned
+###     stub networks.
+sub do_block($$) {
+  my ($block, $indent) = @_;
+  my $block_allocated = Math::BigInt->new(0);
+  my $addrs_free = Math::BigInt->new(0);
+  my $addrs_assigned = Math::BigInt->new(0);
+  if ($block->is_stub()) {
+    return(undef, undef) if $block->af() == 6;
+    $addrs_free = sizeof($block->ip());
+    $addrs_assigned = sizeof($block->ip());
+  }
+
+  ## Avoid duplicates if --recurse and --all are in effect and we're not
+  ## at the start of recursion.  In stats mode, the block info is printed
+  ## at the end in order to collect the statistics from sub-blocks.
+  indent($indent, sprintf "%-35s  %s\n", $block->ip()->cidr(), $block->id())
+    unless (($indent and $opt{all}) or $opt{stats} ne 'none');
+  my @prefixes = $block->registry()->things(sub { my ($a, $b) = @_;
+						  $a->ip() cmp $b->ip(); });
+  ## Add pseudo prefix for overall next block to find the free space
+  ## at the top of the given block.
+  push(@prefixes, IPAM::Prefix->new(undef, next_block($block->ip())->cidr(),
+				    undef, undef));
+  my $prev;
+  foreach my $next (@prefixes) {
+    my $next_ip = $next->ip();
+    my $prev_ip;
+    if ($prev) {
+      ### This section is executed for all proper sub-blocks, i.e.
+      ### neither for the block itself nor for the pseudo-block
+      ### created above.
+      if ($block->is_stub()) {
+	$addrs_free->bdec();
+      } elsif ($opt{recurse}) {
+	my ($free, $allocated) =
+	  do_block($prev, $opt{stats} eq 'stub' ? $indent : $indent+1);
+	$addrs_free->badd($free);
+	$addrs_assigned->badd($allocated);
+      }
+      $block_allocated->badd(sizeof($prev->ip()));
+      $prev_ip = next_block($prev->ip());
+    } else {
+      $prev_ip = $block->ip();
+    }
+    my @filler = filler($prev_ip, $next_ip,
+			$opt{aggregate} ? undef : $block->plen());
+    map { $opt{stats} eq 'none' and
+	    indent($indent+1, sprintf "%-35s  <UNUSED>\n", $_->cidr()) }
+      @filler;
+    if ($next->id() and $opt{all} and $opt{stats} eq 'none') {
+      indent($indent+1, sprintf "%-35s  %s\n", $next_ip->cidr(), $next->id());
+    }
+    $prev = $next;
+  }
+  if ($opt{stats} ne 'none') {
+    if ($block->is_stub()) {
+      my $usage = 100*(1-Math::BigFloat->new($addrs_free)/$addrs_assigned);
+      if ($usage >= $opt{threshold}) {
+	indent($indent, sprintf "%-35s  %-40s Usage: %6.2f%% "
+	       ."(total %d, free %d)\n",
+	       $block->ip()->cidr(), $block->id(),
+	       $usage, $addrs_assigned, $addrs_free);
+      }
+    } elsif ($opt{stats} ne 'stub') {
+      my $block_total = sizeof($block->ip());
+      indent($indent, sprintf "%-35s  %-40s Usage: allocation %6.2f%% "
+	     .", assignment %s, addresses %s\n",
+	     $block->ip()->cidr(), $block->id(),
+	     100 * Math::BigFloat->new($block_allocated)/$block_total,
+	     $addrs_assigned == 0 ? 'N/A' :
+	     sprintf("%6.2f%%",
+		     100 * Math::BigFloat->new($addrs_assigned)/$block_total),
+	     $addrs_assigned == 0 ? 'N/A' :
+	     sprintf("%6.2f%%",
+		     100*(1-Math::BigFloat->new($addrs_free)/$addrs_assigned)));
+    }
+  }
+  return($addrs_free, $addrs_assigned);
+}
+
+sub sizeof($) {
+  my ($ip) = @_;
+  return(Math::BigInt->new(2)->bpow($ip->bits-$ip->masklen));
+}
+
+sub indent($$) {
+  my ($level, $msg) = @_;
+  print ' 'x($level*$indent_unit).$msg;
+}
+
+### Given a prefix, return the NetAddr::IP object of the next adjacent
+### block of the same size.  The end of the address space is identified
+### with the beginning (i.e. wrapped around).
+sub next_block($) {
+  my ($ip) = @_;
+  my $ip_b = ip_to_bigint($ip);
+  my $n_b = $ip_b + Math::BigInt->new(1)->blsft($ip->bits()-$ip->masklen);
+  $n_b->bmod($af{$ip->version()}{modulus});
+  return(bigint_to_ip($n_b, $ip->version(), $ip->masklen()));
+}
+
+### Recursively find the minimal set of prefixes that completely
+### covers an address range given by the first address of the range
+### and the first address of the next occuppied range.  Returns an
+### array of NetAddr::IP objects.
+sub filler($$$) {
+  my ($start, $end, $fixed_plen) = @_;
+  my @result;
+  my $af = $start->version();
+  my $start_b = ip_to_bigint($start);
+  my $end_b = ip_to_bigint($end);
+
+  ## Terminate the recursion if the remaining free space has shrunk
+  ## to zero.
+  $end_b->copy()->bsub($start_b)->badd($af{$af}{modulus})->
+    bmod($af{$af}{modulus})->is_zero() and return();
+
+  my $peff;
+  unless ($fixed_plen) {
+    ## The number of rightmost zero bist in the prefix of $start gives
+    ## the maximum possible aggregation for this prefix.  The overlap
+    ## of $start and $end is an upper bound for this aggregation.
+    my $max_aggr = lsb($start_b);
+    my $overlap = msb($start_b->copy()->bxor($end_b));
+    $peff = $af{$af}{bits} - ($max_aggr < $overlap ? $max_aggr : $overlap);
+  } else {
+    $peff = $fixed_plen;
+  }
+  my $fill_ip = bigint_to_ip($start_b, $af, $peff);
+  push(@result, $fill_ip, filler(next_block($fill_ip), $end, $fixed_plen));
+  return(@result);
+}
+
+### Return the position of the most significant bit of a
+### Math::BigInt
+sub msb($) {
+  my ($n) = @_;
+  return($n->blog(2));
+}
+
+### Return the position of the least significant bit of a
+### Math::BigInt
+sub lsb($) {
+  my ($n) = @_;
+  my $c = $n->copy();
+  my $pos = 0;
+  while ($c->copy()->band(1)->is_zero()) {
+    $pos++;
+    $c->brsft(1);
+  }
+  return($pos);
+}
+
+### Convert the base address of a NetAddr::IP prefix to a
+### Math::BigInt object.
+sub ip_to_bigint($) {
+  my ($ip) = @_;
+  return(Math::BigInt->new($ip->network()->numeric()));
+}
+
+### Create a NetAddr::IP object from a Math::BigInt object and
+### a prefix length.
+sub bigint_to_ip($$$) {
+  my ($b, $af, $plen) = @_;
+  ### Remove leading '0x' prefix and pad with leading zeroes
+  ### to the full size of an address.
+  (my $str = $b->as_hex()) =~ s/^0x//;
+  $str = '0'x($af{$af}{nibbles} - length($str)).$str;
+  my $packed = pack("H".$af{$af}{nibbles}, $str);
+  my $ip = NetAddr::IP->new($af{$af}{ntoa}->($packed)."/".$plen);
+  return($ip);
+}
+
+
+## Local Variables:
+## mode: CPerl
+## End:
