@@ -141,7 +141,6 @@ use IPAM::Prefix;
 use IPAM::Address;
 use IPAM::Network;
 use IPAM::Host;
-use IPAM::HostRef;
 use IPAM::Zone;
 use IPAM::Domain;
 
@@ -200,6 +199,7 @@ Load the IPAM database from the given file.
 
 sub load($$) {
   my ($self, $file) = @_;
+  my (%host_cache, @hosted_on_check);
   my $parser = XML::LibXML->new() or die "Can't create XML parser: $!";
   $parser->set_options(line_numbers => 1, xinclude => 1,
 		       no_xinclude_nodes => 0);
@@ -462,8 +462,7 @@ sub load($$) {
 						 $domain);
 	_verbose($self, "Registering host $alias_fqdn as alias for "
 		 ."$host_fqdn\n");
-	eval { $host->add_alias(IPAM::HostRef->new($alias_node, $alias_fqdn,
-						   $host)) }
+	eval { $host->add_alias(IPAM::Thing->new($alias_node, $alias_fqdn)) }
 	  or _die_at_node($alias_node, $@);
 	eval { $self->{zone_r}->add_rr($alias_node, $alias_fqdn, $alias_ttl,
 				       'CNAME', $host_fqdn,
@@ -476,10 +475,13 @@ sub load($$) {
 							 $host_ttl, $domain);
 	_verbose($self, "Registering host $hosted_on_fqdn as hosted-on for "
 		 ."$host_fqdn\n");
-	eval { $host->add_hosted_on(IPAM::HostRef->new($hosted_on_node,
-						       $hosted_on_fqdn,
-						       $host)) }
+	my $hosted_on = IPAM::Thing->new($hosted_on_node, $hosted_on_fqdn);
+	eval { $host->add_hosted_on($hosted_on) }
 	  or _die_at_node($hosted_on_node, $@);
+	if (not $hosted_on_node->hasAttribute('check') or
+	    $xpc->find('@check[.=string(true())]', $hosted_on_node)) {
+	  push(@hosted_on_check, { host => $host, target => $hosted_on });
+	}
 	eval { $self->{zone_r}->add_rr($hosted_on_node, $host_fqdn,
 				       $hosted_on_ttl,
 				       'PTR', $hosted_on_fqdn,
@@ -494,6 +496,7 @@ sub load($$) {
 	$self->{zone_r}->add_rr($rr_node, $host_fqdn, $host_ttl, $type,
 				$rdata, undef, $host->dns);
       }
+      $host_cache{lc($host_fqdn)} = $host;
     }
   }
 
@@ -505,6 +508,14 @@ sub load($$) {
   	.$iid->name()." at $file, line $line) isn't referenced anywhere\n";
     }
   }
+
+  ### Check if <hosted-on> targets exist
+  foreach my $ref (@hosted_on_check) {
+    exists $host_cache{lc($ref->{target}->name())} or
+      _die_at_node($ref->{target}->node(),
+		   $ref->{host}->name().": hosted-on host "
+		   .$ref->{target}->name()." does not exist.\n");
+    }
 }
 
 sub _verbose($$) {
@@ -756,7 +767,7 @@ List of L<IPAM::Host> objects whose names exactly match $fqdn.
 
 =item alias
 
-List of L<IPAM::HostRef> objects whose names exactly match $fqdn.
+List of L<IPAM::Thing> objects whose names exactly match $fqdn.
 
 =back
 
