@@ -362,8 +362,15 @@ sub load($$) {
 	my $reverse_af = _attr_with_default($af_node, 'reverse-dns', $reverse);
 	my $af_ttl = _ttl($af_node, $addr_ttl);
 	if ($af == 6 and (not $af_node->hasAttribute('from-iid') or
-	    $xpc->find('@from-iid[.=string(true())]', $af_node))) {
-	  if (my $iid = $self->{iid_r}->lookup($host_fqdn)) {
+	    not $xpc->find('@from-iid[.=string(false())]', $af_node))) {
+	  my $iid_lookup_fqdn = $host_fqdn;
+	  unless ($xpc->find('@from-iid[.=string(true())]', $af_node) or
+		  not $af_node->hasAttribute('from-iid')) {
+	    ### from-iid specifies a name from which to copy the IID
+	    $iid_lookup_fqdn = _fqdn($af_node->getAttribute('from-iid'),
+				     $domain);
+	  }
+	  if (my $iid = $self->{iid_r}->lookup($iid_lookup_fqdn)) {
 	    _verbose($self, "Synthesizing IPv6 address for $host_fqdn "
 		     ."from IID.\n");
 	    ### Construct a IPv6 address from the host's IID for all
@@ -372,9 +379,9 @@ sub load($$) {
 	      my $ip = $prefix->ip();
 	      $ip->masklen() == 64 or
 		_die_at_node($ip_node,
-			     "Synthesizing of IPv6 address for $host_fqdn "
-			   ."from IID requires a /64, conflicts with $af ".
-			     $prefix->name());
+			     "$host_fqdn: Synthesizing of IPv6 address "
+			     ."from IID failed: requires a /64, but conflicts "
+			     ."with $af ". $prefix->name());
 	      push(@addrs, { af => $af,
 			     text => ipv6_n2x((add128($ip->aton(),
 						      $iid->ip()->aton()))[1]),
@@ -384,6 +391,10 @@ sub load($$) {
 			     $reverse_af : 'false' });
 	      $iid->in_use(1);
 	    }
+	  } elsif ($iid_lookup_fqdn ne $host_fqdn) {
+	    _die_at_node($af_node, "$host_fqdn: Synthesizing of IPv6 address "
+			 ."from IID failed: references $iid_lookup_fqdn, "
+			 ."which has no IID.");
 	  }
 	}
 
