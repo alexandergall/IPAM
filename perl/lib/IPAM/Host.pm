@@ -3,12 +3,12 @@
 #### Description:   IPAM::Host class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id:$
+#### RCS $Id: Host.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
 
 package IPAM::Host;
 use IPAM::Thing;
+use IPAM::Registry;
 use IPAM::Address;
-use IPAM::HostRef;
 our @ISA = qw(IPAM::Thing);
 
 =head1 NAME
@@ -50,8 +50,8 @@ sub new($$$) {
   $self->{network} = $network;
   $self->{dns} = 1;
   $self->{address_r} = IPAM::Address::Registry->new();
-  $self->{alias_r} = IPAM::HostRef::Registry->new();
-  $self->{hosted_on_r} = IPAM::HostRef::Registry->new();
+  $self->{alias_r} = IPAM::Registry->new();
+  $self->{hosted_on_r} = IPAM::Registry->new();
   return($self);
 }
 
@@ -141,8 +141,10 @@ sub address_registry($) {
 
 eval { $host->add_alias($alias) } or die $@;
 
-Adds the L<IPAM::HostRef> object $alias to the host's alias registry.
-An exception is raised if an alias of the same name has already been
+Adds the L<IPAM::Thing> object $alias to the host's alias registry.
+Such a reference will create a DNS CNAME record for the name
+associated wiht the alias pointing to the name of the host.  An
+exception is raised if an alias of the same name has already been
 registered.
 
 =cut
@@ -156,7 +158,7 @@ sub add_alias($$) {
 
 my @aliases = $host->aliases();
 
-Returns the list of L<IPAM::Alias> objects associated with the host.
+Returns the list of L<IPAM::Thing> objects in the host's "alias" registry.
 
 =cut
 
@@ -169,7 +171,8 @@ sub aliases($) {
 
 my $registry = $host->alias_registry();
 
-Returns the L<IPAM::HostRef::Registry> object of the host.
+Returns the L<IPAM::Registry> associated with the "alias" registry of
+the host.
 
 =cut
 
@@ -178,16 +181,17 @@ sub alias_registry($) {
   return($self->{alias_r});
 }
 
-=item add_hosted_on($alias)
+=item add_hosted_on($hosted_on)
 
 eval { $host->add_hosted_on($hosted_on) } or die $@;
 
-Adds the L<IPAM::HostRef> object $hosted_on to the host's registry.
-Such a reference will create a PTR record for the host which pointing
-to the host refered to by $hosted_on.  This is mainly used by the
-cavari filter generator to associate an address with the host on which
-the firewall rules for the host need to be installed.  An exception is
-raised if an alias of the same name has already been registered.
+Adds the L<IPAM::Thing> object $hosted_on to the host's "hosted-on"
+registry.  Such a reference will create a PTR record for the host
+pointing to the name associated with $hosted_on.  This is mainly used
+by the cavari filter generator to associate an address with the host
+on which the firewall rules for the host need to be installed.  An
+exception is raised if an alias of the same name has already been
+registered.
 
 =cut
 
@@ -200,7 +204,7 @@ sub add_hosted_on($$) {
 
 my @aliases = $host->hosted_on();
 
-Returns the list of L<IPAM::HostRef> objects associated with the host.
+Returns the list of L<IPAM::Thing> objects in the host's "hosted-on" registry.
 
 =cut
 
@@ -213,7 +217,8 @@ sub hosted_on($) {
 
 my $registry = $host->hosted_on_registry();
 
-Returns the L<IPAM::HostRef::Registry> object of the host.
+Returns the L<IPAM::Registry> associated with the "hosted-on" registry
+of the host.
 
 =cut
 

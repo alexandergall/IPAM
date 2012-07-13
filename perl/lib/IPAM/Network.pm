@@ -3,7 +3,7 @@
 #### Description:   IPAM::Network class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id:$
+#### RCS $Id: Network.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
 
 package IPAM::Network;
 use IPAM::Thing;
@@ -213,7 +213,8 @@ sub host_r($) {
 
 my $alias = $net->find_alias($fqdn);
 
-Searches the registries of aliases of all hosts in the network for the FQDN $fqdn and returns the list of matching L<IPAM::HostRef> objects.
+Searches the registries of aliases of all hosts in the network for the
+FQDN $fqdn and returns the list of matching L<IPAM::Thing> objects.
 
 =cut
 
@@ -273,7 +274,7 @@ sub find_host($$) {
 my @aliases = $net_r->find_alias($fqdn);
 
 Calls the find_alias() method of all L<IPAM::Network> objects in the
-registry and returns the list of matching L<IPAM::HostRef> objects.
+registry and returns the list of matching L<IPAM::Thing> objects.
 
 =cut
 
