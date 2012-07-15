@@ -3,7 +3,7 @@
 #### Description:   IPAM::Network class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Network.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
+#### RCS $Id: Network.pm,v 1.2 2012/07/13 15:20:26 gall Exp gall $
 
 package IPAM::Network;
 use IPAM::Thing;
@@ -214,18 +214,19 @@ sub host_r($) {
 my $alias = $net->find_alias($fqdn);
 
 Searches the registries of aliases of all hosts in the network for the
-FQDN $fqdn and returns the list of matching L<IPAM::Thing> objects.
+FQDN $fqdn and returns the L<IPAM::Host> object of the canonical name
+or undef if no matching alias is found.  Note that an alias can have
+at most one canonical name.
 
 =cut
 
 sub find_alias($$) {
   my ($self, $fqdn) = @_;
-  my @result;
   my $next = $self->{host_r}->iterator();
   while (my $host = $next->()) {
-    push(@result, $host->alias_registry()->lookup($fqdn));
+    ($host->alias_registry()->lookup($fqdn)) and return($host);
   }
-  return(@result);
+  return(undef);
 }
 
 package IPAM::Network::Registry;
@@ -274,18 +275,19 @@ sub find_host($$) {
 my @aliases = $net_r->find_alias($fqdn);
 
 Calls the find_alias() method of all L<IPAM::Network> objects in the
-registry and returns the list of matching L<IPAM::Thing> objects.
+registry and returns the L<IPAM::Host> object of the alias' canonical
+name or undef if such alias exists.
 
 =cut
 
 sub find_alias($$) {
   my ($self, $fqdn) = @_;
-  my @result;
   my $next = $self->iterator();
   while (my $network = $next->()) {
-    push(@result, $network->find_alias($fqdn));
+    my $host = $network->find_alias($fqdn);
+    return($host) if $host;
   }
-  return(@result);
+  return(undef);
 }
 
 1;
