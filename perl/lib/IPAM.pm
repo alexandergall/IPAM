@@ -767,7 +767,7 @@ List of L<IPAM::Host> objects whose names exactly match $fqdn.
 
 =item alias
 
-List of L<IPAM::Thing> objects whose names exactly match $fqdn.
+L<IPAM::Host> object of the alias' canonical name, if $fqdn is an alias.
 
 =back
 
@@ -782,10 +782,8 @@ sub nameinfo($$) {
     $info{$reg} = $self->{$registries{$reg}{key}}->lookup($fqdn);
   }
   push(@{$info{block}}, $self->{address_map}->lookup_by_id($fqdn));
-  foreach my $type (qw(host alias)) {
-    my $method = "find_$type";
-    push(@{$info{$type}}, $self->{network_r}->$method($fqdn));
-  }
+  push(@{$info{host}}, $self->{network_r}->find_host($fqdn));
+  $info{alias} = $self->{network_r}->find_alias($fqdn);
   return(\%info);
 }
 
