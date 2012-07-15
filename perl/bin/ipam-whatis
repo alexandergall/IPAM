@@ -90,12 +90,11 @@ sub name_info($$) {
       }
     }
     if ($info->{alias}) {
-      foreach my $alias (@{$info->{alias}}) {
-	indent($indent, "Is an alias for the host "
-	       .$alias->host()->name() ."\n");
-	$opt{detail} and defined_at($alias, $indent+1);
-	$opt{recurse} and name_info($alias->host()->name(), $indent+1);
-      }
+      indent($indent, "Is an alias for the host "
+	     .$info->{alias}->name() ."\n");
+      $opt{detail} and
+	defined_at($info->{alias}->alias_registry()->lookup($fqdn), $indent+1);
+      $opt{recurse} and name_info($info->{alias}->name(), $indent+1);
     }
     my ($zone, $rel_name) = $ipam->registry(IPAM::REG_ZONE)->lookup_fqdn($fqdn);
     if ($zone) {
