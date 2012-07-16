@@ -1,13 +1,20 @@
 #!/usr/bin/perl
 
+my $base_dir;
+BEGIN {
+  $base_dir = '/home/noc/IPAM';
+  if (exists $ENV{IPAM_BASE}) {
+    $base_dir = $ENV{IPAM_BASE};
+  }
+}
 use strict;
 use warnings;
-use lib './lib/perl5';
+use lib "$base_dir/lib/perl5";
 use IPAM;
 use NetAddr::IP;
 use Getopt::Long;
 use Carp qw/longmess cluck confess/;
-#local $SIG{__DIE__} = \&Carp::confess;
+local $SIG{__DIE__} = \&Carp::confess;
 
 my %opt = ( 'default-domain' => 'switch.ch.' , recurse => 0);
 my $indent_unit = 2;
@@ -31,8 +38,8 @@ GetOptions(\%opt, "defaul-domain=s", "detail", "recurse=i") or usage();
 @ARGV >= 1 or usage();
 $opt{recurse}++;
 $opt{recurse} < 0 and $opt{recurse} = 0;
-my $file = 'ipam.xml';
-my $ipam = IPAM->new({ verbose => 0 });
+my $file = "$base_dir/ipam.xml";
+my $ipam = IPAM->new({ verbose => 0, base_dir => $base_dir });
 $ipam->load($file);
 
 foreach my $item (@ARGV) {
