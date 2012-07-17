@@ -4,66 +4,76 @@ namespace a = "http://relaxng.org/ns/compatibility/annotations/1.0"
 start = network
 
 network = element network {
-   attribute name { text },
-   attribute ttl { xsd:int }?,
+   name,
+   ttl?,
    attribute xml:base { text }?,
    element location { text }?,
+   reserved,
    host*
 }
 
-address = element address {
-   attribute ttl { xsd:int }?,
-   [ a:defaultValue = "true" ] attribute canonical-name { xsd:boolean }?,
-   [ a:defaultValue = "true" ] attribute reverse-dns { xsd:boolean }?,
-   ( 
-      element a {
-         attribute ttl { xsd:int }?,
-         attribute canonical-name { xsd:boolean }?,
-         attribute reverse-dns { xsd:boolean }?,
-         element ipv4 { 
-            attribute canonical-name { xsd:boolean }?,
-            attribute reverse-dns { xsd:boolean }?,
-            text 
-         }+ 
-      }? &
-      element aaaa {
-         attribute ttl { xsd:int }?,
-         attribute canonical-name { xsd:boolean }?,
-         attribute reverse-dns { xsd:boolean }?,
-         element ipv6 { 
-            attribute canonical-name { xsd:boolean }?,
-            attribute reverse-dns { xsd:boolean }?,
-            (
-               ( attribute from-iid { xsd:boolean },
-                  empty
-               ) |
-               text
-            ) 
-         }+ 
-      }? 
-   )
+name = attribute name { text }
+ttl = attribute ttl { xsd:int }
+canonical-name = attribute canonical-name { xsd:boolean }
+reverse-dns = attribute reverse-dns { xsd:boolean }
+
+reserved = element reserved {
+   [ a:defaultValue = "full" ] attribute default { 
+      "none" | "minimal" | "full" 
+   }?,
+   element block {
+      attribute prefix { text }
+   }*
 }
 
 host = element host {
-   attribute name { text },
-   attribute ttl { xsd:int }?,
+   name,
+   ttl?,
    [ a:defaultValue = "true" ] attribute dns { xsd:boolean }?,
    [ a:defaultValue = "false" ] attribute noloc { xsd:boolean }?,
    element comment { text }?,
-   address,
+   ip,
    (  
       element alias {
-         attribute name { text },
-         attribute ttl { xsd:int }?
+         name,
+         ttl?
       }* &
       element hosted-on {
-         attribute name { text },
-         attribute ttl { xsd:int }?
+         name,
+         ttl?,
+         [ a:defaultValue= "true" ] attribute check { xsd:boolean }?
       }* &
       element rr {
          attribute type { text },
-         attribute ttl { xsd:int }?,
+         ttl?,
          text
       }*
    )
+}
+
+ip = element ip {
+   ttl?,
+   [ a:defaultValue = "true" ] canonical-name?,
+   [ a:defaultValue = "true" ] reverse-dns?,
+   ( 
+      element v4 {
+         ttl?,
+         canonical-name?,
+         reverse-dns?,
+         address+
+      }? &
+      element v6 {
+         ttl?,
+         canonical-name?,
+         reverse-dns?,
+         [ a:defaultValue = "true" ] attribute from-iid { xsd:boolean | text }?,
+         address*
+      }?
+   )
+}
+
+address = element a {
+   canonical-name?,
+   reverse-dns?,
+   text
 }
