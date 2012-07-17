@@ -1,6 +1,7 @@
 start = zones
 
 zones = element zones {
+   attribute xml:base { text }?,
    attribute base { text },
    element zone {
       attribute name { text },

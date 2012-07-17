@@ -1,7 +1,8 @@
 start = address-map
 
 address-map = element address-map {
-      block+
+   attribute xml:base { text }?,
+   block+
 }
 
 desc = element desc {
