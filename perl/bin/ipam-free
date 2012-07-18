@@ -63,7 +63,9 @@ GetOptions(\%opt, "defaul-domain=s", "all", "aggregate",
 @ARGV == 1 or usage();
 exists $stat_modes{$opt{stats}} or usage();
 my $file = "$base_dir/ipam.xml";
-my $ipam = IPAM->new({ verbose => 0, base_dir => $base_dir });
+system("cd $base_dir && make --silent .validate") == 0 or die;
+my $ipam = IPAM->new({ verbose => undef, base_dir => $base_dir,
+		       validate => undef });
 $ipam->load($file);
 my $fqdn = $ARGV[0];
 $fqdn .= '.'.$opt{'default-domain'} unless $fqdn =~ /\.$/;
