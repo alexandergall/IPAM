@@ -133,6 +133,7 @@ use warnings;
 use XML::LibXML 1.70;
 use NetAddr::IP 4.028 qw(:lower);
 use NetAddr::IP::Util qw(add128 ipv6_n2x);
+use File::Basename;
 use IPAM::Thing;
 use IPAM::Registry;
 use IPAM::IID;
@@ -155,7 +156,10 @@ use constant { REG_ZONE => 'zone',
 	       REG_NETWORK => 'network',
 	     };
 
-my $schema_file = './schemas/ipam.rng';
+my %default_options = ( verbose => undef,
+			base_dir => '.',
+			validate => undef);
+my $schema_file = 'schemas/ipam.rng';
 my %af_tag_to_version = ( v4 => 4, v6 => 6 );
 my %registries = ( IPAM::REG_ZONE => { key => 'zone_r',
 				       module => 'IPAM::Zone::Registry' },
@@ -181,7 +185,13 @@ Create an instance of a IPAM object.
 
 sub new() {
   my ($class, $options) = @_;
-  my $self = { verbose => $options->{verbose} };
+  my $self = {};
+  $self = \%default_options;
+  foreach my $option (keys(%{$options})) {
+    exists $default_options{$option} or
+      die "Unknown option '$option'";
+    $self->{$option} = $options->{$option};
+  }
   return(bless($self, $class));
 }
 
@@ -203,9 +213,13 @@ sub load($$) {
   my $parser = XML::LibXML->new() or die "Can't create XML parser: $!";
   $parser->set_options(line_numbers => 1, xinclude => 1,
 		       no_xinclude_nodes => 0);
-  my $schema = XML::LibXML::RelaxNG->new( location => $schema_file );
+  my $schema =
+    XML::LibXML::RelaxNG->new( location => $self->{base_dir}."/$schema_file" );
   my $ipam = $parser->load_xml(location => $file);
-  $schema->validate($ipam);
+  ### The RelaxNG validator from XML::LibXML::RelaxNG (which is based on
+  ### libxml2) is buggy and can't deal with XInlcude.  Currently, validation
+  ### needs to be performed externally.
+  $self->{validate} and $schema->validate($ipam);
 
   ### Add the name of $file to the DOM as an element node called 'file'
   ### with attribute name="$file".  This allows _nodeinfo() to access the
@@ -366,7 +380,14 @@ sub load($$) {
 	  my $iid_lookup_fqdn = $host_fqdn;
 	  unless ($xpc->find('@from-iid[.=string(true())]', $af_node) or
 		  not $af_node->hasAttribute('from-iid')) {
-	    ### from-iid specifies a name from which to copy the IID
+	    ### from-iid specifies a name from which to copy the IID.
+	    ### In that case, the host must not have its own IID.
+	    my $iid = $self->{iid_r}->lookup($host_fqdn);
+	    $iid and
+	      _die_at_node($af_node, "$host_fqdn: Synthesizing of IPv6 "
+			   ."address from IID failed: references "
+			   ."$iid_lookup_fqdn but has its own IID "
+			   ."(".$iid->ip()->addr().")\n");
 	    $iid_lookup_fqdn = _fqdn($af_node->getAttribute('from-iid'),
 				     $domain);
 	  }
@@ -555,7 +576,7 @@ sub _reserve($$$) {
 sub _nodeinfo($) {
   my ($node) = @_;
   defined $node or return(undef, undef);
-  my $file = $node->findvalue('/ipam-base/file/@name');
+  my ($file, $path) = fileparse($node->findvalue('/ipam-base/file/@name'));
   my $line = $node->line_number();
 
  NODE:
@@ -582,7 +603,7 @@ sub _nodeinfo($) {
   } continue {
     $node = $node->parentNode();
   }
-  return($file, $line);
+  return($path.$file, $line);
 }
 
 ### Determine file name and line number of the definition of a given
