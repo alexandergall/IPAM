@@ -53,7 +53,7 @@ sub bigint_to_ip($$$);
 
 sub usage() {
   print <<"EOF";
-usage: $0 [--all] [--aggregate] [--stats=none|stub|all] [--recurse] <stub-net> | <netblock>
+usage: $0 [--all] [--aggregate] [--stats=none|stub|all] [--recurse] [--threshold=<thresh>] <fqdn> | <prefix>
 EOF
 exit(1);
 }
