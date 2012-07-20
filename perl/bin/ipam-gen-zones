@@ -1,0 +1,57 @@
+#!/usr/bin/perl
+
+my $base_dir;
+BEGIN {
+  $base_dir = '/home/noc/IPAM';
+  if (exists $ENV{IPAM_BASE}) {
+    $base_dir = $ENV{IPAM_BASE};
+  }
+}
+use strict;
+use warnings;
+use lib join('/', $base_dir, 'lib/perl5');
+use IPAM;
+
+my @zones;
+
+sub usage() {
+  print <<"EOF";
+usage: $0 [zone] ...
+EOF
+exit(1);
+}
+
+my $file = "$base_dir/ipam.xml";
+system("cd $base_dir && make --silent validate") == 0 or die;
+my $ipam = IPAM->new({ verbose => undef, base_dir => $base_dir,
+		       validate => undef});
+$ipam->load($file);
+my $zone_r = $ipam->registry(IPAM::REG_ZONE);
+if (@ARGV) {
+  foreach (@ARGV) {
+    my $zone = $zone_r->lookup($_) or
+      die "Unknown zone $_";
+    push(@zones, $zone);
+  }
+} else {
+  @zones = $zone_r->things();
+}
+foreach my $zone (@zones) {
+  my $dir = $zone->directory();
+  if ($dir eq 'IGNORE') {
+    warn "Zone ".$zone->name()." ignored.\n";
+    next;
+  }
+  $file = join('/', $dir, 'd.ipam');
+  print "Writing $file\n";
+  open(ZONE, ">$file") or
+    die "Can't open $file: $!";
+  foreach my $domain (sort { $a->name() cmp $b->name() } $zone->domains()) {
+    $domain->print(\*ZONE);
+  }
+  close(ZONE);
+}
+
+## Local Variables:
+## mode: CPerl
+## End:
