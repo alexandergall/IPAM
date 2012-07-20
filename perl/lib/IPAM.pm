@@ -213,13 +213,16 @@ sub load($$) {
   my $parser = XML::LibXML->new() or die "Can't create XML parser: $!";
   $parser->set_options(line_numbers => 1, xinclude => 1,
 		       no_xinclude_nodes => 0);
-  my $schema =
-    XML::LibXML::RelaxNG->new( location => $self->{base_dir}."/$schema_file" );
   my $ipam = $parser->load_xml(location => $file);
+
   ### The RelaxNG validator from XML::LibXML::RelaxNG (which is based on
   ### libxml2) is buggy and can't deal with XInlcude.  Currently, validation
   ### needs to be performed externally.
-  $self->{validate} and $schema->validate($ipam);
+  if ($self->{validate}) {
+    my $schema = XML::LibXML::RelaxNG->new( location =>
+					    $self->{base_dir}."/$schema_file" );
+    $schema->validate($ipam);
+  }
 
   ### Add the name of $file to the DOM as an element node called 'file'
   ### with attribute name="$file".  This allows _nodeinfo() to access the
