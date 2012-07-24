@@ -19,7 +19,7 @@ use Carp qw/longmess cluck confess/;
 my %opt = ( 'default-domain' => 'switch.ch.' , recurse => 0);
 my $indent_unit = 2;
 my %af_to_name = ( 4 => 'IPv4', 6 => 'IPv6' );
-my (%visited_fqdns, %visited_prefixes);
+my (%visited_fqdns, %visited_prefixes, %visited_hosts);
 
 sub usage() {
   print <<"EOF";
@@ -34,10 +34,12 @@ sub indent($$);
 sub show_address_block($$);
 sub show_host($$);
 
-GetOptions(\%opt, "defaul-domain=s", "detail", "recurse=i") or usage();
+GetOptions(\%opt, "default-domain=s", "detail", "recurse=i") or usage();
 @ARGV >= 1 or usage();
 $opt{recurse}++;
 $opt{recurse} < 0 and $opt{recurse} = 0;
+$opt{'default-domain'} =~ /\.$/ or 
+  die "The default domain must end with a dot.\n";
 my $file = "$base_dir/ipam.xml";
 system("cd $base_dir && make --silent validate") == 0 or die;
 my $ipam = IPAM->new({ verbose => undef, base_dir => $base_dir,
@@ -58,7 +60,12 @@ sub name_info($$) {
   my ($fqdn, $indent) = @_;
   my $recurse_save = $opt{recurse};
   $opt{recurse} > 0 and $opt{recurse}--;
-  $fqdn .= '.'.$opt{'default-domain'} unless $fqdn =~ /\.$/;
+  unless ($fqdn =~ /\.$/) {
+    $fqdn .= '.';
+    unless ($fqdn =~ /\.$opt{'default-domain'}$/) {
+      $fqdn .= $opt{'default-domain'};
+    }
+  }
   unless (exists $visited_fqdns{$fqdn}) {
     $visited_fqdns{$fqdn} = 1;
     indent($indent++, "The domain name $fqdn\n");
@@ -212,7 +219,8 @@ sub show_address_block($$) {
 
 sub show_host($$) {
   my ($host, $indent) = @_;
-  return unless $opt{detail};
+  return if (not $opt{detail} or exists $visited_hosts{$host->name()});
+  $visited_hosts{$host->name()} = 1;
   defined_at($host, $indent);
   foreach my $address ($host->addresses()) {
     my $canonical_host = $address->canonical_host();
