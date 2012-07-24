@@ -10,7 +10,7 @@ BEGIN {
 use strict;
 use warnings;
 use lib join('/', $base_dir, 'lib/perl5');
-use IPAM;
+use IPAM 0.01;
 
 my @zones;
 

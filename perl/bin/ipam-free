@@ -16,7 +16,7 @@ use lib "$base_dir/lib/perl5";
 ## to avoid problems with this (in particular with large
 ## IPv6 blocks).
 no warnings "recursion";
-use IPAM;
+use IPAM 0.01;
 use NetAddr::IP;
 use Math::BigInt;
 use Math::BigFloat;
