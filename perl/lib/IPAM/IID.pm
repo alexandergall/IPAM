@@ -3,7 +3,7 @@
 #### Description:   IPAM::IID class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id:$
+#### RCS $Id: IID.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
 
 package IPAM::IID;
 our @ISA = qw(IPAM::Thing);
@@ -100,7 +100,7 @@ use IPAM::IID;
 =head1 DESCRIPTION
 
 The L<IPAM::IID> class is derived from L<IPAM::Registry>.  It stores a
-list of IIDs represented as L<IPAM::IID> objects.  
+list of IIDs represented as L<IPAM::IID> objects.
 
 =head1 EXTENDED INSTANCE METHODS
 
@@ -108,12 +108,10 @@ list of IIDs represented as L<IPAM::IID> objects.
 
 =item add($iid)
 
-eval { $iid->add($iid_new) } or die $@;
+eval { $iid_r->add($iid_new) } or die $@;
 
-Adds the L<IPAM::IID> object $iid to the list IIDs.  An exception is
+Adds the L<IPAM::IID> object $iid_new to the list IIDs.  An exception is
 raised if a mapping for the same IID already exists.
-
-=back
 
 =cut
 
@@ -131,6 +129,28 @@ sub add($$$) {
     }
   }
   $self->SUPER::add($iid_new);
+}
+
+=item lookup_by_ip($ip)
+
+my $iid = $iid_r->lookup_by_ip($ip);
+
+Searches the registry for the IID represented by the L<NetAddr::IP>
+object $ip and returns the corresponding L<IPAM::IID> object or undef
+if no match is found.
+
+=back
+
+=cut
+
+sub lookup_by_ip($$) {
+  my ($self, $ip) = @_;
+  $ip->version() == 6 or return(undef);
+  my $next_iid = $self->iterator();
+  while (my $iid = $next_iid->()) {
+    $ip == $iid->ip() and return($iid);
+  }
+  return(undef);
 }
 
 1;
