@@ -141,7 +141,14 @@ sub prefix_info($$) {
     my ($prefix, @path) =
       $ipam->address_map()->lookup_by_ip($ip);
     unless ($prefix or @path) {
-      print "The database contains no information about the $type $ip\n";
+      if (my $iid = $ipam->registry(IPAM::REG_IID)->lookup_by_ip($ip)) {
+	indent($indent, $ip->addr()." is an IPv6 interface identifier.\n");
+	$opt{detail} and defined_at($iid, $indent+1);
+	indent($indent+1, "It is assigned to host ".$iid->name()."\n");
+	$opt{recurse} and name_info($iid->name(), $indent+1);
+      } else {
+	print "The database contains no information about the $type $ip\n";
+      }
     } else {
       if ($prefix) {
 	if (my $network = $prefix->network()) {
