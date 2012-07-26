@@ -31,6 +31,7 @@ sub prefix_info($$);
 sub indent($$);
 sub show_address_block($$);
 sub show_host($$);
+sub print_pf_registry($$$);
 
 GetOptions(\%opt, "default-domain=s", "detail", "recurse=i") or usage();
 @ARGV >= 1 or usage();
@@ -194,7 +195,6 @@ sub defined_at($$) {
   indent($indent, "It is defined at $file, line $line\n");
 }
 
-sub print_pf_registry($$$);
 sub print_pf_registry($$$) {
   my ($reg, $indent, $af) = @_;
   my $recurse_save = $opt{recurse};
@@ -206,9 +206,8 @@ sub print_pf_registry($$$) {
     indent($indent, sprintf("%-35s  %s\n", $prefix->name(), $prefix->id()));
     if ($prefix->isa('IPAM::Address') and $opt{recurse}) {
       name_info($prefix->id(), $indent+1);
-    } else {
-      $opt{recurse} and
-	print_pf_registry($prefix->registry(), $indent+1, $prefix->af());
+    } elsif($opt{recurse}) {
+      print_pf_registry($prefix->registry(), $indent+1, $prefix->af());
     }
   }
   $opt{recurse} = $recurse_save;
