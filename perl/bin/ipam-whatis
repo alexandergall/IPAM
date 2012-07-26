@@ -13,8 +13,6 @@ use lib "$base_dir/lib/perl5";
 use IPAM 0.01;
 use NetAddr::IP;
 use Getopt::Long;
-use Carp qw/longmess cluck confess/;
-#local $SIG{__DIE__} = \&Carp::confess;
 
 my %opt = ( 'default-domain' => 'switch.ch.' , recurse => 0);
 my $indent_unit = 2;
@@ -53,7 +51,6 @@ foreach my $item (@ARGV) {
   } else {
     name_info($item, 0);
   }
-  print "\n";
 }
 
 sub name_info($$) {
