@@ -91,11 +91,13 @@ sub name_info($$) {
     }
     if ($info->{network}) {
       my $network = $info->{network};
-      indent($indent, "Is a stub network with the prefix(es) "
-	     .join(', ', map { $_->name() } $network->prefixes()).".\n");
-      $opt{detail} and defined_at($network, $indent);
-      $opt{recurse} and
-	print_pf_registry($network->prefix_registry(), $indent, undef);
+      indent($indent, "Is a stub network.\n");
+      $opt{detail} and defined_at($network, $indent+1);
+      foreach my $prefix ($network->prefixes()) {
+	indent($indent, "Is associated with the prefix "
+	       .$prefix->name()."\n");
+	$opt{recurse} and prefix_info($prefix->ip(), $indent+1);
+      }
     }
     if ($info->{host}) {
       foreach my $host (@{$info->{host}}) {
