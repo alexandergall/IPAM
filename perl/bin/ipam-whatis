@@ -56,6 +56,12 @@ foreach my $item (@ARGV) {
 
 sub name_info($$) {
   my ($fqdn, $indent) = @_;
+  ## Domain names strating with '<' are used by the IPAM for
+  ## addresses that are not associated with real names, e.g.
+  ## <RESERVED> or <no canonical name>.  We silently skip over
+  ## them and hope that no real name starts with this character.
+  $fqdn =~ /^</ and return();
+
   my $recurse_save = $opt{recurse};
   $opt{recurse} > 0 and $opt{recurse}--;
   unless ($fqdn =~ /\.$/) {
