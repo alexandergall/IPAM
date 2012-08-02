@@ -452,7 +452,7 @@ sub load($$) {
 	    $address_cache{$address->name()} = $address;
 	  }
 	  eval { $host->add_address($address) } or
-	    _die_at_node($addr->{$addr->{node}, $@});
+	    _die_at_node($addr->{node}, $@);
 	  $addr->{canonical} eq 'true' and
 	    (eval { $address->canonical_host($host) } or
 	     _die_at_node($addr->{node}, $@));
