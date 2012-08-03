@@ -457,7 +457,7 @@ sub load($$) {
 	    (eval { $address->canonical_host($host) } or
 	     _die_at_node($addr->{node}, $@));
 	  eval { $address->add_host($host) } or
-	    _die_at_node(${addr}->{node}, $@);
+	    _die_at_node($addr->{node}, $@);
 	  my $rrtype = $af_info{$addr->{af}}{rrtype};
 	  eval { $self->{zone_r}->add_rr($addr->{node}, $host_fqdn, $af_ttl,
 					 $rrtype, $address->name(),
