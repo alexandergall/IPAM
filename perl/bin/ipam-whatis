@@ -230,8 +230,9 @@ sub show_address_block($$) {
 
 sub show_host($$) {
   my ($host, $indent) = @_;
-  return if (not $opt{detail} or exists $visited_hosts{$host->name()});
-  $visited_hosts{$host->name()} = 1;
+  return if (not $opt{detail} or 
+	     exists $visited_hosts{$host->name()}{$host->network()->name()});
+  $visited_hosts{$host->name()}{$host->network()->name()} = 1;
   defined_at($host, $indent);
   foreach my $address ($host->addresses()) {
     my $canonical_host = $address->canonical_host();
