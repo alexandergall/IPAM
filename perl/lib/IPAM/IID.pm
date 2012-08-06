@@ -3,7 +3,7 @@
 #### Description:   IPAM::IID class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: IID.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
+#### RCS $Id: IID.pm,v 1.2 2012/07/24 08:39:18 gall Exp gall $
 
 package IPAM::IID;
 our @ISA = qw(IPAM::Thing);
@@ -39,6 +39,8 @@ An exception is raised if these conditions are not met.
 
 sub new($$$$) {
   my ($class, $node, $name, $id) = @_;
+  $id =~ s/^\s+//;
+  $id =~ s/\s+$//;
   my $self = $class->SUPER::new($node, $name);
   $self->{ip} = NetAddr::IP->new6($id) or
     die "$self->{name}: Malformed IPv6 address $id\n";
