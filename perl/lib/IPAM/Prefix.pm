@@ -3,7 +3,7 @@
 #### Description:   IPAM::Prefix class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id:$
+#### RCS $Id: Prefix.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
 
 package IPAM::Prefix;
 use IPAM;
@@ -62,6 +62,8 @@ of any known address family.
 
 sub new($$$$$) {
   my ($class, $node, $string, $id, $stub) = @_;
+  $string =~ s/^\s+//;
+  $string =~ s/\s+$//;
   my $ip = NetAddr::IP->new($string) or
     die "Malformed prefix or address: $string\n";
   my $self = $class->SUPER::new($node, $ip->cidr());
