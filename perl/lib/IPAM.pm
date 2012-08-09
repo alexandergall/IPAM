@@ -263,6 +263,7 @@ sub load($$) {
     ## This TTL is used for all LOC records derived from the network's
     ## location element.
     my $loc_ttl = $network_ttl;
+    my $loc_node = ($xpc->findnodes('location'))[0];
     my $network = IPAM::Network->new($network_node, $network_fqdn,
 				     $xpc->findvalue('location'));
     eval { $self->{network_r}->add($network) } or
@@ -476,7 +477,7 @@ sub load($$) {
 
       if (my $loc = $network->location() and not
 	  $xpc->find('@noloc[.=string(true())]')) {
-	eval { $self->{zone_r}->add_rr(undef, $host_fqdn, $loc_ttl, 'LOC',
+	eval { $self->{zone_r}->add_rr($loc_node, $host_fqdn, $loc_ttl, 'LOC',
 				       $loc, undef, $host->dns()) } or
 					 _die_at_node($host_node, $@);
       }
