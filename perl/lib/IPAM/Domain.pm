@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id:$
+#### RCS $Id: Domain.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -108,18 +108,20 @@ sub add_rr($$$$$$$) {
 				       node => $node});
 }
 
-=item print($FILEH, $indent)
+=item print($FILEH, $indent, $annotate)
 
 $domain->print(\*STDOUT, 0);
 
 Print all RRsets in valid (but not canonical) master file syntax to
 the filehandle referred by $FILEH.  If $indent is an integer, that
-number of spaces is prepended to each output line.
+number of spaces is prepended to each output line. If $annotate is true,
+each RR is accompanied with a comment containing the file name and line
+number of the IPAM XML element from which the data was derived.
 
 =cut
 
 sub print($$$) {
-  my ($self, $FILE, $n) = @_;
+  my ($self, $FILE, $n, $annotate) = @_;
   my $name = $self->name() ? $self->name() : '@';
   my $indent = (defined $n and $n =~ /^\d+$/) ? ' 'x$n : '';
   foreach my $type (keys(%{$self->{types}})) {
@@ -140,6 +142,11 @@ sub print($$$) {
 		    $rr->{dns} ? '' : ';<inactive>',
     		    $name, $rrset->{ttl}, $type, $rr->{rdata});
       defined $rr->{comment} and print $FILE " ; ".$rr->{comment};
+      if (defined $annotate and $annotate) {
+	my ($file, $line) = IPAM::_nodeinfo($rr->{node});
+	defined $file and
+	  print $FILE (" ; $file, line $line");
+      }
       print $FILE "\n";
       $name = '';
     }
