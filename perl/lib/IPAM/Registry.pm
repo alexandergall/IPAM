@@ -3,7 +3,7 @@
 #### Description:   IPAM::Registry class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id:$
+#### RCS $Id: Registry.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
 package IPAM::Registry;
 our $name = 'Generic registry';
 
@@ -148,7 +148,7 @@ sub iterator($$) {
 	  });
 }
 
-=item thing($sorter)
+=item things($sorter)
 
 my @things = $registry->things();
 
