@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.2 2012/08/09 07:15:56 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -145,7 +145,7 @@ sub print($$$) {
       if (defined $annotate and $annotate) {
 	my ($file, $line) = IPAM::_nodeinfo($rr->{node});
 	defined $file and
-	  print $FILE (" ; $file, line $line");
+	  print $FILE (" ; $file:$line");
       }
       print $FILE "\n";
       $name = '';
