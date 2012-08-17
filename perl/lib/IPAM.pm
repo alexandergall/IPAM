@@ -264,8 +264,12 @@ sub load($$) {
     ## location element.
     my $loc_ttl = $network_ttl;
     my $loc_node = ($xpc->findnodes('location'))[0];
-    my $network = IPAM::Network->new($network_node, $network_fqdn,
-				     $xpc->findvalue('location'));
+    my $location = $xpc->findvalue('location');
+    my $network = IPAM::Network->new($network_node, $network_fqdn, $location);
+    $location and
+      (eval { $self->{zone_r}->add_rr($loc_node, $network_fqdn, $loc_ttl, 'LOC',
+				      $location, undef, 1) } or
+       _die_at_node($loc_node, $@));
     eval { $self->{network_r}->add($network) } or
       _die_at_node($network_node, $@);
 
@@ -518,7 +522,7 @@ sub load($$) {
 	my $type = $rr_node->getAttribute('type');
 	my $rr_ttl = _ttl($rr_node, $host_ttl);
 	(my $rdata = $rr_node->textContent()) =~ s/^\s*(.*?)\s*$/$1/;
-	$self->{zone_r}->add_rr($rr_node, $host_fqdn, $host_ttl, $type,
+	$self->{zone_r}->add_rr($rr_node, $host_fqdn, $rr_ttl, $type,
 				$rdata, undef, $host->dns);
       }
       $host_cache{lc($host_fqdn)} = $host;
