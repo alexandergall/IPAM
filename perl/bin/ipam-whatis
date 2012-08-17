@@ -92,7 +92,8 @@ sub name_info($$) {
       my $zone = $info->{zone};
       indent($indent, "Is a DNS zone\n");
       $opt{detail} and defined_at($zone, $indent+1);
-      $opt{recurse} and map { $_->print(\*STDOUT, ($indent+1)*$indent_unit) }
+      $opt{recurse} and map { $_->print(\*STDOUT, ($indent+1)*$indent_unit,
+					$opt{detail}) }
 	(sort { $a->name() cmp $b->name() } $zone->domains());
     }
     if ($info->{network}) {
@@ -124,7 +125,7 @@ sub name_info($$) {
       if (my $domain = $zone->lookup_domain($rel_name)) {
 	indent($indent, "Owns the following DNS records in the zone "
 	       .$zone->name()."\n");
-	$domain->print(\*STDOUT, ($indent+1)*$indent_unit);
+	$domain->print(\*STDOUT, ($indent+1)*$indent_unit, $opt{detail});
       } else {
 	indent($indent, "Belongs to the zone ".$zone->name()
 	       .", but there are no DNS records associated with it.\n");
