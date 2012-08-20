@@ -80,9 +80,6 @@ sub name_info($$) {
 	next if $prefix->is_stub();
 	indent($indent, "Is an address block that defines the prefix "
 	       .$prefix->name()."\n");
-	if (my $description = $prefix->description()) {
-	  indent($indent,"Is described as: $description\n");
-	}
 	show_address_block($prefix, $indent+1);
       }
     }
@@ -103,10 +100,12 @@ sub name_info($$) {
     if ($info->{network}) {
       my $network = $info->{network};
       indent($indent, "Is a stub network.\n");
-      if (my $description = $network->description()) {
-	indent($indent, "Is described as: $description\n");
+      if ($opt{detail}) {
+	defined_at($network, $indent+1);
+	if (my $description = $network->description()) {
+	  indent($indent+1, "It is described as: $description\n");
+	}
       }
-      $opt{detail} and defined_at($network, $indent+1);
       foreach my $prefix ($network->prefixes()) {
 	indent($indent, "Is associated with the prefix "
 	       .$prefix->name()."\n");
@@ -117,8 +116,6 @@ sub name_info($$) {
       foreach my $host (@{$info->{host}}) {
 	indent($indent, "Is a host that belongs to the network "
 	       .$host->network()->name()."\n");
-	my $description = $host->description();
-	$description and indent($indent, "Is described as: $description\n");
 	show_host($host, $indent+1);
       }
     }
@@ -233,7 +230,12 @@ sub print_pf_registry($$$) {
 
 sub show_address_block($$) {
   my ($prefix, $indent) = @_;
-  $opt{detail} and defined_at($prefix, $indent);
+  if ($opt{detail}) {
+    defined_at($prefix, $indent);
+    if (my $description = $prefix->description()) {
+      indent($indent,"It is described as: $description\n");
+    }
+  }
   $opt{recurse} and
     print_pf_registry($prefix->registry(), $indent, $prefix->af());
 }
@@ -244,6 +246,8 @@ sub show_host($$) {
 	     exists $visited_hosts{$host->name()}{$host->network()->name()});
   $visited_hosts{$host->name()}{$host->network()->name()} = 1;
   defined_at($host, $indent);
+  my $description = $host->description();
+  $description and indent($indent, "It is described as: $description\n");
   foreach my $address ($host->addresses()) {
     my $canonical_host = $address->canonical_host();
     indent($indent, "It is ".
