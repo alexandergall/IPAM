@@ -3,7 +3,7 @@
 #### Description:   IPAM::Thing class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Thing.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
+#### RCS $Id: Thing.pm,v 1.2 2012/08/20 12:11:32 gall Exp gall $
 package IPAM::Thing;
 
 =head1 NAME
@@ -19,7 +19,8 @@ use IPAM::Thing;
 All items derived from an IPAM database are stored as IPAM::Thing
 objects or derivatives thereof.  The only attributes of a plain Thing
 are its name and optionally a reference to the L<XML::LibXML::Node>
-object from which it was created.
+object from which it was created as well as a free-form text that
+provides a description of the Thing.
 
 =head1 CLASS METHODS
 
