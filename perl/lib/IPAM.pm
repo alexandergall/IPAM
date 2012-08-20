@@ -72,7 +72,7 @@ addresses ranges of both address families used for this purpose.
 
 In an IPv6 environment, a stub network can have any number of prefixes
 (at most one IPv4 and any number of IPv6 but at least one of any
-kind).  The name of a stub networks collects all prefixes that make up
+kind).  The name of a stub network collects all prefixes that make up
 a single IP subnet.
 
 =back
@@ -101,10 +101,10 @@ of this attribute is twofold.
 
 The reverse DNS mapping always points to the canonical name.  The
 creation of such a mapping can be suppressed by specifying the
-attribute rever-dns="false" for the <ipv4> or <ipv6> element that
+attribute reverse-dns="false" for the <ipv4> or <ipv6> element that
 defines the canonical name for the address.
 
-=item 2. 
+=item 2.
 
 It serves as a simple check for uniqueness of an address.  This is
 because the attribute canonical-name="true" is the default and only
@@ -118,7 +118,7 @@ In addition, a canonical name can also have any number of aliases
 =item DNS Zone Registry
 
 All DNS names in the database are fully qualified (FQDN - fully
-qualified domain names).  In order to create fragments of DNS master
+qualified domain name).  In order to create fragments of DNS master
 files that can be included in the main zone master file, the zone cuts
 and locations of the master files must be configured into the IPAM
 database.  This is done by a simple association of a zone name to a
