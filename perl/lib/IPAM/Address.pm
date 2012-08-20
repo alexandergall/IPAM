@@ -3,7 +3,7 @@
 #### Description:   IPAM::Address class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id:$
+#### RCS $Id: Address.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
 
 package IPAM::Address;
 use IPAM::Prefix;
@@ -21,11 +21,10 @@ use IPAM::Address;
 
 The L<IPAM::Address> class is derived from L<IPAM::Prefix>.  The
 derived class limits the prefix length to the maximum allowed by the
-address family.  An address is associated with a L<IPAM::Host> object
-that represnts the canonical name for the address instead of an
-L<IPAM::Network> object as for an ordinary prefix.  In addition, it
-keeps track of the L<IPAM::Secondary> objects that are associated with
-the address.
+address family.  An address is associated with any number of
+L<IPAM::Host> objects which are using the address.  At most one
+L<IPAM::Host> object is designated to be the canonical name for the
+address.
 
 The name of the object as returned by the name() instance method does
 not contain the prefix length (i.e. the maximum prefix length is
@@ -122,7 +121,7 @@ sub add_host($$) {
 my @hosts = $address->hosts();
 
 Returns the list of L<IPAM::Host> objects in the addresse's registry
-of hosts that are assigned to the $address..
+of hosts that are assigned to the $address.
 
 =back
 
