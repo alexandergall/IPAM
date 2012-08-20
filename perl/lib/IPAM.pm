@@ -266,12 +266,13 @@ sub load($$) {
     my $loc_node = ($xpc->findnodes('location'))[0];
     my $location = $xpc->findvalue('location');
     my $network = IPAM::Network->new($network_node, $network_fqdn, $location);
+    eval { $self->{network_r}->add($network) } or
+      _die_at_node($network_node, $@);
     $location and
       (eval { $self->{zone_r}->add_rr($loc_node, $network_fqdn, $loc_ttl, 'LOC',
 				      $location, undef, 1) } or
        _die_at_node($loc_node, $@));
-    eval { $self->{network_r}->add($network) } or
-      _die_at_node($network_node, $@);
+    $network->description($xpc->findvalue('description'));
 
     ### Find all stub-prefixes associated with the network.  A network
     ### must have at least one prefix and can't have more than one IPv4
@@ -353,6 +354,7 @@ sub load($$) {
       _verbose($self, "Processing host $host_fqdn\n");
       my $host = IPAM::Host->new($host_node, $host_fqdn, $network);
       eval { $network->add_host($host) } or _die_at_node($host_node, $@);
+      $host->description($xpc->findvalue('description'));
 
       ### Default values should be set by the "a:defaultValue"
       ### annotations in the schema, but I don't know how that
@@ -686,6 +688,8 @@ sub _register_address_blocks($$$$@) {
 					  $node->getAttribute('prefix'),
 					  $fqdn, $type eq 'net' ? 1 : 0) }
       or _die_at_node($node, $@);
+    $prefix->description($node->findvalue('description'));
+
     ## Stub nets have an implicit "plen" of the maximum value of
     ## the address family.
     $type eq 'net' and $plen = $af_info{$prefix->af()}{max_plen};
