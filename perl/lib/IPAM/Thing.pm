@@ -3,7 +3,7 @@
 #### Description:   IPAM::Thing class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id:$
+#### RCS $Id: Thing.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
 package IPAM::Thing;
 
 =head1 NAME
@@ -89,6 +89,28 @@ Thing.
 sub nodeinfo($) {
   my ($self) = @_;
   return(IPAM::_nodeinfo($self->{node}));
+}
+
+=item description()
+
+my $description = $thing->description();
+
+Returns a string that contains free-form text describing the thing.
+
+=item description($descr)
+
+$thing->description('Foo bar baz');
+
+Registers the free-from text $descr as a description of the thing.
+
+=cut
+
+sub description($$) {
+  my ($self, $description) = @_;
+  if (defined $description) {
+    $self->{description} = $description;
+  }
+  return($self->{description});
 }
 
 1;
