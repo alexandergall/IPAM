@@ -7,6 +7,7 @@ network = element network {
    name,
    ttl?,
    attribute xml:base { text }?,
+   description?,
    element location { text }?,
    reserved,
    host*
@@ -16,6 +17,7 @@ name = attribute name { text }
 ttl = attribute ttl { xsd:int }
 canonical-name = attribute canonical-name { xsd:boolean }
 reverse-dns = attribute reverse-dns { xsd:boolean }
+description = element description { text }
 
 reserved = element reserved {
    [ a:defaultValue = "full" ] attribute default { 
@@ -31,7 +33,7 @@ host = element host {
    ttl?,
    [ a:defaultValue = "true" ] attribute dns { xsd:boolean }?,
    [ a:defaultValue = "false" ] attribute noloc { xsd:boolean }?,
-   element comment { text }?,
+   description?,
    ip,
    (  
       element alias {

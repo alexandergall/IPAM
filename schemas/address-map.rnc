@@ -5,20 +5,16 @@ address-map = element address-map {
    block+
 }
 
-desc = element desc {
-   text
-}
-
 net = element net {
    attribute prefix { text },
    attribute name { text },
-   desc?
+   empty
 }
 
 block = element block {
    attribute prefix { text },
    attribute name { text },
    attribute plen { xsd:integer }?,
-   desc?,
+   element description { text }?,
    ( net* & block* )
 }
