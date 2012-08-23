@@ -535,7 +535,7 @@ sub load($$) {
 
   ### Check if there are unreferenced IIDs.
   foreach my $iid ($self->{iid_r}->things()) {
-    unless ($iid->in_use()) {
+    if ($iid->use() and not $iid->in_use()) {
       my ($file, $line) = $iid->nodeinfo();
       warn "Warning: IPv6 IID ".$iid->ip()->addr()." (assigned to host "
   	.$iid->name()." at $file, line $line) isn't referenced anywhere\n";
