@@ -38,10 +38,7 @@ if (@ARGV) {
 }
 foreach my $zone (@zones) {
   my $dir = $zone->directory();
-  if ($dir eq 'IGNORE') {
-    warn "Zone ".$zone->name()." ignored.\n";
-    next;
-  }
+  next if $dir eq 'IGNORE';
   $file = join('/', $dir, 'd.ipam');
   ## Ouput the full name of the zone file.  The Makefile depends on this!
   print "$file\n";
