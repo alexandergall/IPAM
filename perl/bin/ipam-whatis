@@ -102,9 +102,7 @@ sub name_info($$) {
       indent($indent, "Is a stub network.\n");
       if ($opt{detail}) {
 	defined_at($network, $indent+1);
-	if (my $description = $network->description()) {
-	  indent($indent+1, "It is described as: $description\n");
-	}
+	description($network->description(), $indent+1);
       }
       foreach my $prefix ($network->prefixes()) {
 	indent($indent, "Is associated with the prefix "
@@ -210,6 +208,15 @@ sub defined_at($$) {
   indent($indent, "It is defined at $file, line $line\n");
 }
 
+sub description($$) {
+  my ($description, $indent) = @_;
+  if ($description) {
+    indent($indent, "It is described as: $description\n");
+  } else {
+    indent($indent, "It has no description.\n");
+  }
+}
+
 sub print_pf_registry($$$) {
   my ($reg, $indent, $af) = @_;
   my $recurse_save = $opt{recurse};
@@ -232,9 +239,7 @@ sub show_address_block($$) {
   my ($prefix, $indent) = @_;
   if ($opt{detail}) {
     defined_at($prefix, $indent);
-    if (my $description = $prefix->description()) {
-      indent($indent,"It is described as: $description\n");
-    }
+    description($prefix->description(), $indent);
   }
   $opt{recurse} and
     print_pf_registry($prefix->registry(), $indent, $prefix->af());
@@ -246,8 +251,7 @@ sub show_host($$) {
 	     exists $visited_hosts{$host->name()}{$host->network()->name()});
   $visited_hosts{$host->name()}{$host->network()->name()} = 1;
   defined_at($host, $indent);
-  my $description = $host->description();
-  $description and indent($indent, "It is described as: $description\n");
+  description($host->description(), $indent);
   foreach my $address ($host->addresses()) {
     my $canonical_host = $address->canonical_host();
     indent($indent, "It is ".
