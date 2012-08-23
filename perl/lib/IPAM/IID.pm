@@ -3,7 +3,7 @@
 #### Description:   IPAM::IID class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: IID.pm,v 1.2 2012/07/24 08:39:18 gall Exp gall $
+#### RCS $Id: IID.pm,v 1.3 2012/08/06 15:10:52 gall Exp gall $
 
 package IPAM::IID;
 our @ISA = qw(IPAM::Thing);
@@ -46,6 +46,7 @@ sub new($$$$) {
     die "$self->{name}: Malformed IPv6 address $id\n";
   $self->{ip}->within($zero_subnet_v6) or
     die "$self->{name}: IID $id not within ::/64\n";
+  $self->{use} = 1;
   $self->{in_use} = 0;
   return($self);
 }
@@ -67,6 +68,35 @@ sub ip {
   return($self->{ip});
 }
 
+=item use()
+
+if ($iid->use()) {
+  ##
+}
+
+Returns a true value if the IID can be used to construct addresses
+for the host, false otherwise.
+
+=back
+
+=item use($use)
+
+$iid->use(0);
+$iid->use(1);
+
+Declares whether the IID can or cannot be used to construct addresses
+for the host if the argument is a true or a false value, respectively.
+By setting this flag to false, the IID is essentially reserved but will
+not be used to create actual addresses.
+
+=cut
+
+sub use($$) {
+  my ($self, $use) = @_;
+  defined $use and $self->{use} = $use;
+  return($self->{use});
+}
+
 =item in_use($use)
 
 Marks the IID as in use if $use is a true value.
@@ -80,7 +110,7 @@ once from a <ipv6> address assignment via the "from-iid" attribute.
 
 =cut
 
-sub in_use($use) {
+sub in_use($$) {
   my ($self, $use) = @_;
   defined $use and $self->{in_use} = $use;
   return($self->{in_use});
