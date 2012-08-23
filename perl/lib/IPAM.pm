@@ -402,25 +402,27 @@ sub load($$) {
 				     $domain);
 	  }
 	  if (my $iid = $self->{iid_r}->lookup($iid_lookup_fqdn)) {
-	    _verbose($self, "Synthesizing IPv6 address for $host_fqdn "
-		     ."from IID.\n");
-	    ### Construct a IPv6 address from the host's IID for all
-	    ### the network's prefixes.
-	    foreach my $prefix ($network->prefixes(undef, $af)) {
-	      my $ip = $prefix->ip();
-	      $ip->masklen() == 64 or
-		_die_at_node($ip_node,
-			     "$host_fqdn: Synthesizing of IPv6 address "
-			     ."from IID failed: requires a /64, but conflicts "
-			     ."with $af ". $prefix->name());
-	      push(@addrs, { af => $af,
-			     text => ipv6_n2x((add128($ip->aton(),
-						      $iid->ip()->aton()))[1]),
-			     node => $af_node,
-			     canonical => $canonical_af,
-			     reverse => $canonical_af eq 'true' ?
-			     $reverse_af : 'false' });
-	      $iid->in_use(1);
+	    if ($iid->use()) {
+	      ### Construct a IPv6 address from the host's IID for all
+	      ### the network's prefixes.
+	      _verbose($self, "Synthesizing IPv6 address for $host_fqdn "
+		       ."from IID.\n");
+	      foreach my $prefix ($network->prefixes(undef, $af)) {
+		my $ip = $prefix->ip();
+		$ip->masklen() == 64 or
+		  _die_at_node($ip_node,
+			       "$host_fqdn: Synthesizing of IPv6 address "
+			       ."from IID failed: requires a /64, but "
+			       ."conflicts with $af ". $prefix->name());
+		push(@addrs, { af => $af,
+			       text => ipv6_n2x((add128($ip->aton(),
+							$iid->ip()->aton()))[1]),
+			       node => $af_node,
+			       canonical => $canonical_af,
+			       reverse => $canonical_af eq 'true' ?
+			       $reverse_af : 'false' });
+		$iid->in_use(1);
+	      }
 	    }
 	  } elsif ($iid_lookup_fqdn ne $host_fqdn) {
 	    _die_at_node($af_node, "$host_fqdn: Synthesizing of IPv6 address "
@@ -732,10 +734,17 @@ sub _register_iids($$@) {
   my ($self, $domain, @nodes) = @_;
   for my $node (@nodes) {
     my $id = $node->getAttribute('id');
+    my $use = $node->getAttribute('use');
+    if (defined $use and $use eq 'false') {
+      $use = 0;
+    } else {
+      $use = 1;
+    }
     my $fqdn = _fqdn($node->getAttribute('name'), $domain);
     my $iid = eval { IPAM::IID->new($node, $fqdn, $id) } or
       _die_at_node($node, $@);
     eval { $self->{iid_r}->add($iid) } or _die_at_node($node, $@);
+    $iid->use($use);
     _verbose($self, "Registered IID $id for host $fqdn\n");
   }
 }
