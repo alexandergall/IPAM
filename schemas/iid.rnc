@@ -1,9 +1,13 @@
+datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
+namespace a = "http://relaxng.org/ns/compatibility/annotations/1.0"
+
 start = interface-identifiers
 
 interface-identifiers = element interface-identifiers {
    attribute xml:base { text }?,
    element iid {
       attribute id { text },
-      attribute name { text }
+      attribute name { text },
+      [ a:defaultValue = "true" ] attribute use { xsd:boolean }?
    }*
 }
