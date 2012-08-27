@@ -19,13 +19,13 @@ my $zones_dir = "$base_dir/zones";
 
 sub usage() {
   print <<"EOF";
-usage: $0 [zone] ...
-       $0 --gen-links
+usage: $0 [--annotate] [zone] ...
+       $0 --conf
 EOF
 exit(1);
 }
 
-GetOptions(\%opt, "--conf") or usage();
+GetOptions(\%opt, 'conf', 'annotate') or usage();
 ($opt{conf} and @ARGV != 0) and usage();
 my $file = "$base_dir/ipam.xml";
 system("cd $base_dir && make --silent validate") == 0 or die;
@@ -63,7 +63,7 @@ foreach my $zone (@zones) {
   print ZONE ";;;; Updates to the IP Address Management database must be ";
   print ZONE "done in $base_dir\n\n";
   foreach my $domain (sort { $a->name() cmp $b->name() } $zone->domains()) {
-    $domain->print(\*ZONE, undef, 1);
+    $domain->print(\*ZONE, undef, $opt{annotate});
   }
   close(ZONE) or die "Can't close $file: $!";
 }
