@@ -441,11 +441,13 @@ sub load($$) {
 	  my $reverse_a = _attr_with_default($a_node, 'reverse-dns',
 					     $reverse_af);
 	  $canonical_a eq 'false' and $reverse_a = 'false';
+	  my $dns_a = _attr_with_default($a_node, 'dns', 'true');
 	  push(@addrs, { af => $af,
 			 text => $a_node->textContent(),
 			 node => $a_node,
 			 canonical => $canonical_a,
-			 reverse => $reverse_a });
+			 reverse => $reverse_a,
+			 dns => ($host->dns() and $dns_a eq 'true') });
 	}
 
 	foreach my $addr (@addrs) {
@@ -476,7 +478,7 @@ sub load($$) {
 					 $rrtype, $address->name(),
 					 $addr->{reverse} eq 'true' ?
 					 undef : "secondary $rrtype RR",
-					 $host->dns()) } or
+					 $addr->{dns}) } or
 					   _die_at_node($af_node, $@);
 	}
       } # foreach $af_node
@@ -656,11 +658,12 @@ sub _fqdn($$) {
 }
 
 ### Returns the value of a particular attribute of the given node if
-### it exists or the default value if it doesn't.
+### it exists or the default value if it doesn't.  The attribute value
+### is converted to lower-case with lc().
 sub _attr_with_default($$$) {
   my ($node, $attr, $default) = @_;
   my $value = $node->getAttribute($attr);
-  return(defined $value ? $value : $default);
+  return(defined $value ? lc($value) : $default);
 }
 
 ### Shortcut for _attr_with_default for the 'ttl' attribute.
