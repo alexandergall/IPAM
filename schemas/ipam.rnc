@@ -27,11 +27,11 @@ ipam-base = element ipam-base {
          empty 
       }),
    element networks {
-      (network+ |
+      (network_or_group |
       element xi:include { 
          attribute href { text },
          empty 
-      }+)
+      })+
    }
 }
 
