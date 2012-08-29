@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.3 2012/08/17 12:32:37 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.4 2012/08/22 15:03:18 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -138,7 +138,7 @@ sub print($$$) {
       }
       $rdata{$rr->{rdata}} = 1;
       printf $FILE ("$indent%s%-30s %6s IN %-8s %-s",
-		    $rr->{dns} ? '' : ';<inactive>',
+		    $rr->{dns} ? '' : '; <inactive> ',
     		    $name, $rrset->{ttl}, $type, $rr->{rdata});
       defined $rr->{comment} and print $FILE " ; ".$rr->{comment};
       if (defined $annotate and $annotate) {
@@ -147,7 +147,9 @@ sub print($$$) {
 	  print $FILE (" ; $file:$line");
       }
       print $FILE "\n";
-      $name = '';
+      ## The owner name is only printed for the first RR unless
+      ## it happens to be commented out ("inactive").
+      $rr->{dns} and $name = '';
     }
 
   }
