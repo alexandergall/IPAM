@@ -1,7 +1,12 @@
 datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
 namespace a = "http://relaxng.org/ns/compatibility/annotations/1.0"
 
-start = network
+start = network_or_group
+
+network_or_group = ( element group { 
+   attribute xml:base { text }?,
+   network+ } | 
+   network )
 
 network = element network {
    name,
