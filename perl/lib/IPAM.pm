@@ -424,7 +424,8 @@ sub load($$) {
 			       node => $af_node,
 			       canonical => $canonical_af,
 			       reverse => $canonical_af eq 'true' ?
-			       $reverse_af : 'false' });
+			       $reverse_af : 'false',
+			       dns => 1});
 		$iid->in_use(1);
 	      }
 	    }
