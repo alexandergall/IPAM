@@ -254,7 +254,8 @@ sub load($$) {
 
   ### Loop through the network declarations and process the hosts
   ### therein.
-  for my $network_node ($xpc->findnodes('networks/network')) {
+  for my $network_node 
+    ($xpc->findnodes('networks/network|networks/group/network')) {
     my %address_cache;
     $xpc->setContextNode($network_node);
     my ($network_fqdn, $network_ttl) = _fqdn_ttl($network_node, $ttl, $domain);
