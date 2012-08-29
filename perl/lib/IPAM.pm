@@ -209,7 +209,7 @@ Load the IPAM database from the given file.
 
 sub load($$) {
   my ($self, $file) = @_;
-  my (%host_cache, @hosted_on_check);
+  my (%host_cache, %alias_cache, @hosted_on_check, %admin_check);
   my $parser = XML::LibXML->new() or die "Can't create XML parser: $!";
   $parser->set_options(line_numbers => 1, xinclude => 1,
 		       no_xinclude_nodes => 0);
@@ -355,6 +355,9 @@ sub load($$) {
       my $host = IPAM::Host->new($host_node, $host_fqdn, $network);
       eval { $network->add_host($host) } or _die_at_node($host_node, $@);
       $host->description($xpc->findvalue('description'));
+      if (my ($admin_ref, $domain) = ($host_fqdn =~ /^(\w+)-admin\.(.*)$/i)) {
+	$admin_check{$host_fqdn} = join('.', $admin_ref, $domain);
+      }
 
       ### Default values should be set by the "a:defaultValue"
       ### annotations in the schema, but I don't know how that
@@ -477,11 +480,9 @@ sub load($$) {
 	}
       } # foreach $af_node
 
-      unless ($host->address_registry->counter()) {
-	my ($file, $line) = $host->nodeinfo();
-	warn "Warning: there are no addresses associated with "
-	  ."the host ".$host->name()." (defined at $file, line $line)\n";
-      }
+      $host->address_registry->counter() or
+	_warn_at_node($host->node(), "There are no addresses associated with "
+	  ."the host ".$host->name());
 
       if (my $loc = $network->location() and not
 	  $xpc->find('@noloc[.=string(true())]')) {
@@ -501,6 +502,7 @@ sub load($$) {
 				       'CNAME', $host_fqdn,
 				       undef, $host->dns()) } or
 					 _die_at_node($alias_node, $@);
+	$alias_cache{lc($alias_fqdn)} = $host;
       }
 
       foreach my $hosted_on_node ($xpc->findnodes('hosted-on')) {
@@ -535,11 +537,10 @@ sub load($$) {
 
   ### Check if there are unreferenced IIDs.
   foreach my $iid ($self->{iid_r}->things()) {
-    if ($iid->use() and not $iid->in_use()) {
-      my ($file, $line) = $iid->nodeinfo();
-      warn "Warning: IPv6 IID ".$iid->ip()->addr()." (assigned to host "
-  	.$iid->name()." at $file, line $line) isn't referenced anywhere\n";
-    }
+    ($iid->use() and not $iid->in_use()) and
+      _warn_at_node($iid->node(), "IPv6 IID ".$iid->ip()->addr().
+		    ", assigned to host ".$iid->name().
+		    ", isn't referenced anywhere");
   }
 
   ### Check if <hosted-on> targets exist
@@ -547,8 +548,16 @@ sub load($$) {
     exists $host_cache{lc($ref->{target}->name())} or
       _die_at_node($ref->{target}->node(),
 		   $ref->{host}->name().": hosted-on host "
-		   .$ref->{target}->name()." does not exist.\n");
+		   .$ref->{target}->name()." does not exist");
     }
+
+  ### Check if "-admin" hosts exist without the host itself
+  foreach my $admin (keys(%admin_check)) {
+    my $ref = $admin_check{$admin};
+    (exists $host_cache{lc($ref)} or exists $alias_cache{lc($ref)}) or
+      _warn_at_node($host_cache{lc($admin)}->node(),
+		   "Console $admin: managed host $ref does not exist");
+  }
 }
 
 sub _verbose($$) {
@@ -620,12 +629,22 @@ sub _nodeinfo($) {
 
 ### Determine file name and line number of the definition of a given
 ### node and add them to an error message to die.
-sub _die_at_node($$) {
-  my ($node, $msg) = @_;
+sub _at_node($$$) {
+  my ($node, $msg, $warn) = @_;
   my ($file, $line) = _nodeinfo($node);
   chomp $msg;
-  defined $file and die "$msg at $file, line $line\n";
-  die "$msg\n";
+  defined $file and $msg = "$msg at $file, line $line";
+  $warn ? warn "Warning: $msg\n" : die "Error: $msg\n";
+}
+
+sub _warn_at_node($$) {
+  my ($node, $msg) = @_;
+  _at_node($node, $msg, 1);
+}
+
+sub _die_at_node($$) {
+  my ($node, $msg) = @_;
+  _at_node($node, $msg, undef);
 }
 
 ### Return a FQDN for a given name.  If the name ends with a dot, it
