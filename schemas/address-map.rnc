@@ -1,7 +1,5 @@
 start = address-map
 
-description = element description { text }
-
 address-map = element address-map {
    attribute xml:base { text }?,
    block+
@@ -10,13 +8,13 @@ address-map = element address-map {
 net = element net {
    attribute prefix { text },
    attribute name { text },
-   description?
+   element description { text }?
 }
 
 block = element block {
    attribute prefix { text },
    attribute name { text },
    attribute plen { xsd:integer }?,
-   description?,
+   element description { text }?,
    ( net* & block* )
 }
