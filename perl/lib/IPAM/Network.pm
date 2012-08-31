@@ -3,7 +3,7 @@
 #### Description:   IPAM::Network class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Network.pm,v 1.3 2012/07/15 11:35:47 gall Exp gall $
+#### RCS $Id: Network.pm,v 1.4 2012/08/20 15:17:49 gall Exp gall $
 
 package IPAM::Network;
 use IPAM::Thing;
@@ -80,14 +80,12 @@ eval { $net->add_prefix($prefix) } or die $@;
 
 Adds the given IPAM::Prefix object to the registry of prefixes
 associated with the network.  An exception is raised if this fails
-(see L<IPAM::Prefix>).  The description attached to the network is
-inherited by the prefix.
+(see L<IPAM::Prefix>).
 
 =cut
 sub add_prefix($$) {
   my ($self, $prefix) = @_;
   $self->{prefix_r}->add($prefix);
-  $prefix->description($self->description());
 }
 
 =item  prefixes($sorter, $af)
