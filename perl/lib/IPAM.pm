@@ -842,6 +842,11 @@ L<IPAM::IID> object whose name exactly matches $fqdn.
 
 List of L<IPAM::Network> objects whose names exactly match $fqdn.
 
+=item block
+
+List of L<IPAM::Prefix> objects that define network blocks or stub
+networks in the address map whose id attribute matches $fqdn.
+
 =item host
 
 List of L<IPAM::Host> objects whose names exactly match $fqdn.
