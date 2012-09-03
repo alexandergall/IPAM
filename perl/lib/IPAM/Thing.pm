@@ -3,7 +3,7 @@
 #### Description:   IPAM::Thing class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Thing.pm,v 1.2 2012/08/20 12:11:32 gall Exp gall $
+#### RCS $Id: Thing.pm,v 1.3 2012/08/20 12:37:20 gall Exp gall $
 package IPAM::Thing;
 
 =head1 NAME
@@ -40,7 +40,7 @@ the thing is not associated with any XML node in the IPAM database.
 
 sub new($$$) {
   my ($class, $node, $name) = @_;
-  my $self = { node => $node, name => $name };
+  my $self = { node => $node, name => $name, description => '' };
   return(bless($self, $class));
 }
 
