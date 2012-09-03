@@ -321,7 +321,10 @@ sub load($$) {
       my $default =  $reserved_node->getAttribute('default');
       defined $default or $default = 'full';
       if ($plen < 31 and $default ne 'none') {
-	map { $self->_reserve($network, $reserved_node, $_->addr()) }
+	map {
+	  $self->_reserve($network, $reserved_node, $_->addr())
+	    ->description('Network/Broadcast address')
+	  }
 	  ($prefix->ip()->network(), $prefix->ip()->broadcast());
 	if ($default eq 'full') {
 	  my $max_reserve = 1;
@@ -332,19 +335,22 @@ sub load($$) {
 	  }
 	  for (my $i = 0; $i < $max_reserve; $i++) {
 	    $self->_reserve($network, $reserved_node,
-			    $prefix->ip()->nth($i)->addr());
+			    $prefix->ip()->nth($i)->addr())
+	      ->description('Reserved for network equippment');
 	  }
 	}
       }
       foreach my $block_node ($xpc->findnodes('reserved/block')) {
-	my $prefix = eval {
+	my $prefix_r = eval {
 	  IPAM::Prefix->new($block_node,
 			    $block_node->getAttribute('prefix'), 0)
 	  } or $self->_die_at_node($block_node, $@);
-	$prefix->af() == 4 or
+	$prefix_r->af() == 4 or
 	  $self->_die_at_node($block_node,
 			      "Reserved address block must be IPv4\n");
-	foreach my $ip (@{$prefix->ip()->splitref(32)}) {
+	foreach my $ip (@{$prefix_r->ip()->splitref(32)}) {
+	  ## Ignore overlap with the broadcast address
+	  next if $ip->addr() eq $prefix->ip()->broadcast()->addr();
 	  $self->_reserve($network, $block_node, $ip->addr());
 	}
       }
@@ -664,6 +670,8 @@ sub _reserve($$$) {
     or $self->_die_at_node($reserved_node, $@);
   eval { $network->add_address($address) }
     or $self->_die_at_node($reserved_node, $@);
+  $address->description($reserved_node->findvalue('description'));
+  return($address);
 }
 
 ### Determine file name and line number of the definition of a given
