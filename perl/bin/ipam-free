@@ -74,12 +74,15 @@ if  ($ARGV[0] =~ /(\d+\.\d+\.\d+\.\d+|:|\/)/) {
   my $ip = NetAddr::IP->new($ARGV[0]) or die "Malformed address ".$ARGV[0];
   $ip->masklen() < $ip->bits() or die "Network prefix expected ("
     .$ip->cidr()." is an address)";
-  if (my $prefix =
-      $ipam->address_map()->lookup_by_ip($ip)) {
-    do_block($prefix, 0);
-  } else {
+  my ($prefix, @path) = $ipam->address_map()->lookup_by_ip($ip);
+  if (not $prefix and @path) {
+    $prefix = pop(@path);
+    warn "No match found for ".$ip->cidr().", using closest covering "
+      ."prerix ".$prefix->name()." instead.\n";
+  } elsif (not $prefix and not @path) {
     die "No matching block or stub-net found for ".$ip->cidr();
   }
+  do_block($prefix, 0);
 } else {
   my $fqdn = $ARGV[0];
   $fqdn .= '.'.$opt{'default-domain'} unless $fqdn =~ /\.$/;
@@ -153,7 +156,8 @@ sub do_block($$) {
 	    indent($indent+1, sprintf "%-35s  <UNUSED>\n", $_->cidr()) }
       @filler;
     if ($next->id() and $opt{all} and $opt{stats} eq 'none') {
-      indent($indent+1, sprintf "%-35s  %s\n", $next_ip->cidr(), $next->id());
+      indent($indent+1, sprintf "%-35s  %-30s %-30s\n", $next_ip->cidr(),
+	     $next->id(), $next->description());
     }
     $prev = $next;
   }
