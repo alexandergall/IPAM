@@ -1,9 +1,9 @@
 #### -*- mode: CPerl; -*-
-#### File name:     Things.pm
+#### File name:     Thing.pm
 #### Description:   IPAM::Thing class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Thing.pm,v 1.3 2012/08/20 12:37:20 gall Exp gall $
+#### RCS $Id: Thing.pm,v 1.4 2012/09/03 12:22:55 gall Exp gall $
 package IPAM::Thing;
 
 =head1 NAME
@@ -16,11 +16,30 @@ use IPAM::Thing;
 
 =head1 DESCRIPTION
 
-All items derived from an IPAM database are stored as IPAM::Thing
-objects or derivatives thereof.  The only attributes of a plain Thing
-are its name and optionally a reference to the L<XML::LibXML::Node>
-object from which it was created as well as a free-form text that
-provides a description of the Thing.
+L<IPAM::Thing> is the base class for all objects stored in the IPAM.
+A basic Thing has three properties.
+
+=over 4
+
+=item Name
+
+This is an arbitrary string that identifies the Thing.  If the Thing
+is part of a L<IPAM::Registry>, the name converted to lower-case will
+be unique within the registry.
+
+=item Node
+
+Most Things in the IPAM are derived from an XML element in the IPAM
+database.  In this case, the node attribute of a Thing is a reference
+to the L<XML::LibXML::Node> object from which it was constructed.
+
+=item Description
+
+The description is a free-form text field that may contain a
+human-readable description of the Thing.  When a Thing is created, the
+description is initialized to an empty string.
+
+=back
 
 =head1 CLASS METHODS
 
@@ -83,8 +102,6 @@ Returns the file name and line number where the XML node associated
 with the Thing is defined or undef if no node is associated with the
 Thing.
 
-=back
-
 =cut
 
 sub nodeinfo($) {
@@ -96,13 +113,13 @@ sub nodeinfo($) {
 
 my $description = $thing->description();
 
-Returns a string that contains free-form text describing the thing.
+Returns a string that contains free-form text describing the Thing.
 
 =item description($descr)
 
 $thing->description('Foo bar baz');
 
-Registers the free-from text $descr as a description of the thing.
+Registers the free-from text $descr as a description of the Thing.
 
 =cut
 
@@ -113,5 +130,13 @@ sub description($$) {
   }
   return($self->{description});
 }
+
+=back
+
+=head1 SEE ALSO
+
+L<IPAM::Registry>, L<XML::LibXML>
+
+=cut
 
 1;
