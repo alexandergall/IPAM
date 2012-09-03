@@ -3,7 +3,7 @@
 #### Description:   IPAM::Prefix class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Prefix.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
+#### RCS $Id: Prefix.pm,v 1.2 2012/08/06 15:09:05 gall Exp gall $
 
 package IPAM::Prefix;
 use IPAM;
@@ -40,9 +40,13 @@ network.
 my $prefix = eval { IPAM::Prefix->new($node, $addr, $id, $stub) } or die $@;
 
 A L<NetAddr::IP> object is created from $addr, which is expected to be
-a valid textual representation of an IP address.  The name of the
-prefix object (as returned by the name() instance method) is set to
-the value of the cidr() method of the L<NetAdde::IP> object.
+a valid textual representation of a proper IP prefix.  This means
+that, apart from the restrictions on imposed by the class
+L<NetAddr::IP>, it is also required that the host-part of the prefix
+(the bits of the address that are covered by the zero-bits of the
+netmask) is zero.  The name of the prefix object (as returned by the
+name() instance method) is set to the value of the cidr() method of
+the L<NetAdde::IP> object.
 
 $id is an arbitrary string by which the prefix can be found through
 the lookup_by_id() instance method of a L<IPAM::Prefix::Registry> in
@@ -53,8 +57,8 @@ in the IPAM database.  Note that it does not have to be unique.
 $stub is a boolean value that indicates whether the prefix describes a
 stub network or not.
 
-An exception is raised if $addr cannot be interpreted as an IP address
-of any known address family.
+An exception is raised if $addr cannot be interpreted as a proper IP
+prefix of any known address family.
 
 =back
 
@@ -66,6 +70,8 @@ sub new($$$$$) {
   $string =~ s/\s+$//;
   my $ip = NetAddr::IP->new($string) or
     die "Malformed prefix or address: $string\n";
+  $ip->network()->addr() eq $ip->addr() or
+    die "Not a proper prefix (non-zero host part): $string\n";
   my $self = $class->SUPER::new($node, $ip->cidr());
   $self->{id} = $id;
   $self->{ip} = $ip;
