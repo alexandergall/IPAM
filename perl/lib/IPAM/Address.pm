@@ -3,7 +3,7 @@
 #### Description:   IPAM::Address class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Address.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
+#### RCS $Id: Address.pm,v 1.2 2012/08/20 12:47:01 gall Exp gall $
 
 package IPAM::Address;
 use IPAM::Prefix;
@@ -83,7 +83,10 @@ the address.
 $address->canonical_host($host);
 
 Sets the L<IPAM::Host> object $host to be the canonical host
-associated with the address.
+associated with the address. The "id" attribute of the address is set
+to the hostname as obtained from the host's name() method. In
+addition, the address' "description" attribute is copied from the
+host's description as obtained from the description() method.
 
 =cut
 
@@ -98,6 +101,7 @@ sub canonical_host($$) {
     }
     $self->{canonical} = $host;
     $self->{id} = $host->name();
+    $self->description($host->description());
   }
   return($self->{canonical});
 }
