@@ -30,7 +30,8 @@ reserved = element reserved {
       "none" | "minimal" | "full" 
    }?,
    element block {
-      attribute prefix { text }
+      attribute prefix { text },
+      (description | empty)
    }*
 }
 
