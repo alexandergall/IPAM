@@ -3,7 +3,7 @@
 #### Description:   IPAM::Prefix class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Prefix.pm,v 1.2 2012/08/06 15:09:05 gall Exp gall $
+#### RCS $Id: Prefix.pm,v 1.3 2012/09/03 09:53:52 gall Exp gall $
 
 package IPAM::Prefix;
 use IPAM;
@@ -16,49 +16,52 @@ IPAM::Prefix - Class that describes a network prefix
 
 =head1 SYNOPSIS
 
-use IPAM::Prefix;
+  use IPAM::Prefix;
 
 =head1 DESCRIPTION
 
-The L<IPAM::Prefix> class is derived from L<IPAM::Thing>.  It is
-associated with a network prefix which is represented by a
-L<NetAddr::IP> object.  It also holds a L<IPAM::Prefix::Registry> that
-can store a list of more-specific prefixes (which necessarily need to
-belong to the same address family).  A prefix can be marked to be a
-"stub network".  In that case, it can (but doesn't have to) be
-associated with a L<IPAM::Network> object.  The prefixe's registry is
-specialised to be of the type L<IPAM::Address::Registry> and stores
-all addresses of hosts within the prefix that belong to the stub
-network.
+The L<IPAM::Prefix> class is derived from L<IPAM::Thing>.  It
+describes a network prefix which is represented by a L<NetAddr::IP>
+object.  It also holds a L<IPAM::Prefix::Registry> that can store a
+list of more-specific prefixes (which necessarily need to belong to
+the same address family).
+
+A prefix can be marked to be a "stub network".  In that case, it can
+(but doesn't have to) be associated with a L<IPAM::Network> object.
+The registry is then specialised to be of the type
+L<IPAM::Address::Registry> and stores all addresses of hosts within
+the prefix that belong to the stub network.
 
 =head1 EXTENDED CLASS METHODS
 
 =over 4
 
-=item new($node, $addr, $id, $stub)
+=item C<new($node, $addr, $id, $stub)>
 
-my $prefix = eval { IPAM::Prefix->new($node, $addr, $id, $stub) } or die $@;
+  my $prefix = eval { IPAM::Prefix->new($node, $addr, $id, $stub) } or die $@;
 
 A L<NetAddr::IP> object is created from $addr, which is expected to be
-a valid textual representation of a proper IP prefix.  This means
-that, apart from the restrictions on imposed by the class
-L<NetAddr::IP>, it is also required that the host-part of the prefix
-(the bits of the address that are covered by the zero-bits of the
-netmask) is zero.  The name of the prefix object (as returned by the
-name() instance method) is set to the value of the cidr() method of
-the L<NetAdde::IP> object.
+a valid textual representation of a proper IP prefix, where "proper"
+means that the host-part of the prefix (the bits of the address that
+are covered by the zero-bits of the netmask) is zero.  For example,
+2001:620:0:/48 is a proper prefix, but 2001:620:0:1::/48 is not.  
 
-$id is an arbitrary string by which the prefix can be found through
-the lookup_by_id() instance method of a L<IPAM::Prefix::Registry> in
-which the prefix is stored.  The id is a FQDN derived from the "name"
-attribute of the <block> or <net> XML element which defines the prefix
-in the IPAM database.  Note that it does not have to be unique.
+The name of the prefix object (as returned by the C<name()> instance
+method) is set to the output of the C<cidr()> method of the prefixe's
+L<NetAddr::IP> object.
 
-$stub is a boolean value that indicates whether the prefix describes a
-stub network or not.
+C<$id> is a string by which the prefix can be found through the
+C<lookup_by_id()> instance method of a L<IPAM::Prefix::Registry> in
+which the prefix is stored.  The C<id> is a FQDN derived from the
+C<name> attribute of the C<< <block> >> or C<< <net> >> XML element
+which defines the prefix in the IPAM database.  Note that it does not
+have to be unique.
 
-An exception is raised if $addr cannot be interpreted as a proper IP
-prefix of any known address family.
+C<$stub> is a boolean value that indicates whether the prefix
+describes a stub network or not.
+
+An exception is raised if C<$addr> cannot be interpreted as a proper
+IP prefix of any known address family.
 
 =back
 
@@ -88,12 +91,13 @@ sub new($$$$$) {
 
 =over 4
 
-=item af()
+=item C<af()>
 
-my $af = $prefix->af();
+  my $af = $prefix->af();
 
-Returns the address family of the prefix as returned by the version()
-instance method of the L<NetAddr::IP> object embedded in the prefix.
+Returns the address family of the prefix as returned by the
+C<version()> instance method of the L<NetAddr::IP> object embedded in
+the prefix.
 
 =cut
 
@@ -102,11 +106,11 @@ sub af($) {
   return($self->{ip}->version());
 }
 
-=item ip()
+=item C<ip()>
 
-my $ip = $prefix->ip();
+  my $ip = $prefix->ip();
 
-Returns the L<NetAddr::IP> that represents the prefix.
+Returns the L<NetAddr::IP> object that represents the prefix.
 
 =cut
 
@@ -115,11 +119,11 @@ sub ip($) {
   return($self->{ip});
 }
 
-=item id()
+=item C<id()>
 
-my $id = $prefix->id();
+  my $id = $prefix->id();
 
-Returns the 'id' attribute of the prefix.
+Returns the C<id> attribute of the prefix.
 
 =cut
 
@@ -128,9 +132,9 @@ sub id($) {
   return($self->{id});
 }
 
-=item is_stub()
+=item C<is_stub()>
 
-my $is_stub = $prefix->is_stub();
+  my $is_stub = $prefix->is_stub();
 
 Returns true if the prefix represents a stub network, false otherwise.
 
@@ -141,25 +145,38 @@ sub is_stub($) {
   return($self->{stub});
 }
 
-=item plen()
+=item C<plen()>
 
-my $plen = $prefix->plen()
+  my $plen = $prefix->plen()
 
 Returns the common prefix length of all sub-prefixes registered for
-this prefix.  This represents the "plen" attribute of the <block> element
-in the address map that defines the prefix.
+this prefix.  This represents the C<plen> attribute of the C<< <block>
+>> element in the address map that defines the prefix.
 
 =cut
 
-=item plen($plen)
+=item C<plen($plen)>
 
-$prefix->plen($plen);
+  $prefix->plen($plen);
 
 Sets the common prefix length for sub-prefixes of this prefix.  An
-exception is raised if $plen
-  - is not numeric
-  - is less or equal than the prefixe's own plen
-  - exceeds the maximum value for the prefixe's address family.
+exception is raised if C<$plen>
+
+=over 4
+
+=item *
+
+is not numeric
+
+=item *
+
+is less or equal than the prefixe's own plen
+
+=item * 
+
+exceeds the maximum value for the prefixe's address family.
+
+=back
 
 =cut
 
@@ -180,16 +197,16 @@ sub plen($$) {
   return($self->{plen});
 }
 
-=item network($network)
+=item C<network($network)>
 
-$prefix->network($network);
+  $prefix->network($network);
 
-Associates the L<IPAM::Network> object $network with the prefix.  Raises
-an exception if the prefix is not a stub.
+Associates the L<IPAM::Network> object C<$network> with the prefix.
+Raises an exception if the prefix is not a stub network.
 
-=item network()
+=item C<network()>
 
-my $net = $prefix->network();
+  my $net = $prefix->network();
 
 Returns the L<IPAM::Network> object associated with the prefix.
 
@@ -205,12 +222,16 @@ sub network($$) {
   return($self->{network});
 }
 
-=item contains($prefix)
+=item C<contains($prefix)>
 
-my $contains = $prefix->contains($other_prefix);
+  if ($prefix->contains($other_prefix)) {
+    print $other_prefix->name()." is a more specific prefix"
+          ." prefix of ".$prefix->name()."\n";
+  }
 
 Returns true if the prefix strictly contains the given L<IPAM::Prefix>
-object $prefix, false otherwise.
+object $prefix according to the C<contains()> method of the
+L<NetAddr::IP> class, false otherwise.
 
 =cut
 
@@ -219,14 +240,15 @@ sub contains($$) {
   return($self->{ip}->contains($prefix->ip()));
 }
 
-=item add($prefix)
+=item C<add($prefix)>
 
-eval { $prefix->add($other_prefix) } or die $@;
+  eval { $prefix->add($other_prefix) } or die $@;
 
-Adds $prefix to the prefixe's own L<IPAM::Prefix::Registry>.  An
-exception is raised if the address families don't match or if $prefix
-is not covered by the prefix or if the prefix is a stub network and
-$prefix is not an L<IPAM::Address>.
+Adds the L<IPAM::Prefix> object C<$prefix> to the prefixe's own
+L<IPAM::Prefix::Registry>.  An exception is raised if the address
+families don't match or if C<$prefix> is not covered by the prefix or
+if the prefix is a stub network and C<$prefix> is not an
+L<IPAM::Address>.
 
 =cut
 
@@ -251,13 +273,11 @@ sub add($$) {
   $self->{prefix_r}->add($prefix);
 }
 
-=item registry()
+=item C<registry()>
 
-my $registry = $prefix->registry();
+  my $registry = $prefix->registry();
 
 Returns the L<IPAM::Prefix::Registry> of the prefix.
-
-=back
 
 =cut
 
@@ -265,6 +285,14 @@ sub registry($) {
   my ($self) = @_;
   return($self->{prefix_r})
 }
+
+=back
+
+=head1 SEE ALSO
+
+L<IPAM::Thing>, L<NetAddr::IP>, L<IPAM::Address>, L<IPAM::Network>
+
+=cut
 
 package IPAM::Prefix::Registry;
 use IPAM::Registry;
@@ -277,24 +305,30 @@ IPAM::Prefix::Registry - Class of a registry for L<IPAM::Prefix> objects
 
 =head1 SYNOPSIS
 
-use IPAM::Prefix;
+  use IPAM::Prefix::Registry;
 
 =head1 DESCRIPTION
 
-The L<IPAM::Prefix::Registry> class is derived from
-L<IPAM::Registry>.  It stores a list of L<IPAM::Prefix> objects.
+The L<IPAM::Prefix::Registry> class is derived from L<IPAM::Registry>.
+It stores a list of L<IPAM::Prefix> objects and provides facilities to
+search a prefix by its C<name>, C<ip> or C<id> attribute.  All methods
+extend the search recursively into the registries of more-specific
+prefixes in a depth-first manner.
 
 =head1 EXTENDED INSTANCE METHODS
 
 =over 4
 
-=item add($prefix)
+=item C<add($prefix)>
 
-eval { $prefix_r->add($prefix) } or die $@;
+  eval { $prefix_r->add($prefix) } or die $@;
 
-Adds the L<IPAM::Prefix> object $prefix to the registry.  An exception
-is raised if $prefix overlaps with any of the already registered
-prefixes.
+Adds the L<IPAM::Prefix> object C<$prefix> to the registry.  An
+exception is raised if C<$prefix> overlaps with any of the already
+registered prefixes.  In particular, the method does not descend into
+the registries of the L<IPAM::Prefix> objects, i.e. it is not possible
+to add a prefix that is a more-specific of a prefix that is already
+registered.
 
 =cut
 
@@ -329,14 +363,14 @@ sub _common($$$$) {
   return(IPAM::Registry->can($method)->($self, $sorter));
 }
 
-=item iterator($sorter, $af)
+=item C<iterator($sorter, $af)>
 
-my $next = $prefix_r->iterator(undef, '6');
-while (my $prefix = $next->()) {
-  print $prefix->name()."\n";
-}
+  my $next = $prefix_r->iterator(undef, '6');
+  while (my $prefix = $next->()) {
+    print $prefix->name()."\n";
+  }
 
-Extends the base method to include an optional argument $af that
+Extends the base method to include an optional argument C<$af> that
 restricts the iterator to a specfific address family.
 
 =cut
@@ -346,11 +380,11 @@ sub iterator($$$) {
   return((_common($self, 'iterator', $sorter, $af))[0]);
 }
 
-=item things($sorter, $af)
+=item C<things($sorter, $af)>
 
-my @prefixes = $prefix_r->things(undef, '4');
+  my @prefixes = $prefix_r->things(undef, '4');
 
-Extends the base method to include an optional argument $af that
+Extends the base method to include an optional argument C<$af> that
 restricts the list to a specfific address family.
 
 =cut
@@ -360,11 +394,10 @@ sub things($$$) {
   return(_common($self, 'things', $sorter, $af));
 }
 
-=item lookup($name)
+=item C<lookup($name)>
 
-Extends the base method to extend the search to the registries of
-stored prefixes (i.e. searches all sub-prefixes in a depth-first
-manner).
+Extends the base method to search the registries of stored prefixes
+recursively in a depth-first manner.
 
 =back
 
@@ -385,9 +418,9 @@ sub lookup($$) {
 
 =over 4
 
-=item af_list()
+=item C<af_list()>
 
-my @af_list = $prefix_r->af_list();
+  my @af_list = $prefix_r->af_list();
 
 Returns a list of address families that are represented in the
 registry.
@@ -396,22 +429,20 @@ registry.
 
 sub af_list($) {
   my ($self) = @_;
-  my %afs;
-  map { $afs{$_->af()} = 1 } $self->things();
-  return(keys(%afs));
+  return(keys(%{$self->{things_by_af}}));
 }
 
-=item lookup_by_ip($ip)
+=item C<lookup_by_ip($ip)>
 
-my $prefix = $prefix_r->lookup_by_ip($ip);
-my ($prefix, @path) = $prefix_r->lookup_by_ip($ip);
+  my $prefix = $prefix_r->lookup_by_ip($ip);
+  my ($prefix, @path) = $prefix_r->lookup_by_ip($ip);
 
 If called in a scalar context, returns the uniqe L<IPAM::Prefix>
-object that matches the L<NetAddr::IP> object $ip or undef if no match
-is found.  If called in a list context, it also returns the list of
-L<IPAM::Prefix> objects that were traversed during the search.  The
-last element of this list is the most specific covering prefix of $ip.
-The following code covers alle possible cases
+object that matches the L<NetAddr::IP> object C<$ip> or undef if no
+match is found.  If called in a list context, it also returns the list
+of L<IPAM::Prefix> objects that were traversed during the search.  The
+last element of this list is the most specific covering prefix of
+C<$ip>.  The following code covers alle possible cases
 
   my ($prefix, @path) = $address_map->lookup_by_ip($ip);
   unless ($prefix or @path) {
@@ -446,17 +477,18 @@ sub lookup_by_ip($$) {
   }
 }
 
-=item lookup_by_id($id)
+=item C<lookup_by_id($id)>
 
-my @prefixes = $prefix_r->lookup_by_id($id);
+  my @prefixes = $prefix_r->lookup_by_id($id);
 
-Returns a list of L<IPAM::Prefix> objects whose id attribute matches
-the string $id.  The id attribute is derived from the "name" attribute
-of a <block> or <net> XML element in the IPAM database.  Note that the
-name of an L<IPAM::Prefix> as returned by the name() instance method
-inherited from the L<IPAM::Thing> class is, by convention, the
-human-readable CIDR representation of the prefix.  While the former is
-unique in the address map, the latter is not.
+Returns a list of L<IPAM::Prefix> objects whose C<id> attribute
+matches the string C<$id>.  The C<id> attribute is derived from the
+C<name> attribute of a C<< <block> >> or C<< <net> >> XML element in
+the IPAM database.  Note that the name of an L<IPAM::Prefix> as
+returned by the C<name()> instance method inherited from the
+L<IPAM::Thing> class is, by convention, the human-readable CIDR
+representation of the prefix.  While the former is unique in the
+address map, the latter is not.
 
 =cut
 
@@ -475,5 +507,13 @@ sub lookup_by_id($$$) {
   }
   return(@result);
 }
+
+=back
+
+=head1 SEE ALSO
+
+L<IPAM::Registry>, L<IPAM::Prefix>, L<NetAddr::IP>
+
+=cut
 
 1;
