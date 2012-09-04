@@ -3,11 +3,11 @@
 #### Description:   IPAM::Address class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Address.pm,v 1.3 2012/09/03 12:16:18 gall Exp gall $
+#### RCS $Id: Address.pm,v 1.4 2012/09/04 12:59:40 gall Exp gall $
 
 package IPAM::Address;
 use IPAM::Prefix;
-use IPAM::Host::Registry;
+use IPAM::Host;
 our @ISA = qw(IPAM::Prefix);
 
 =head1 NAME
