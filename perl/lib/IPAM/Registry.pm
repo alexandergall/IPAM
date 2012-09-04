@@ -3,38 +3,40 @@
 #### Description:   IPAM::Registry class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Registry.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
+#### RCS $Id: Registry.pm,v 1.2 2012/08/09 15:43:04 gall Exp gall $
 package IPAM::Registry;
 our $name = 'Generic registry';
 
 =head1 NAME
 
-IPAM::Registry - Base class for a registry of IPAM::Thing objects
+IPAM::Registry - Base class for a registry of L<IPAM::Thing> objects
 
 =head1 SYNOPSIS
 
-use IPAM::Registry;
+  use IPAM::Registry;
 
 =head1 DESCRIPTION
 
-This is essentially a hash keyed by the names of the L<IPAM::Thing>
-objects that are stored in it with a built-in check for uniqueness of
-the names.  For the purpose of this check, all names are converted to
-lower case using the Perl built-in lc().
+An L<IPAM::Registry> is a simple container for L<IPAM::Thing> objects.
+Things can only be added, not removed.  A registry can be thought of
+as a hash keyed by the names of the L<IPAM::Thing> objects that are
+stored in it with a built-in check for uniqueness of the names.  For
+the purpose of this check, all names are converted to lower case using
+the Perl built-in lc().
 
 The registry is associated with a name which is printed in error
 messages to make them more meaningful.  The default name is "Generic
 registry" and should be overriden by derived classes.
 
-=head1 METHODS
+=head1 CLASS METHODS
 
 =over 4
 
-=item new()
+=item C<new()>
 
-my $registry = IPAM::Registry->new();
+  my $registry = IPAM::Registry->new();
 
-Creates a new IPAM::Registry object.
+Creates a new L<IPAM::Registry> object.
 
 =cut
 
@@ -51,9 +53,15 @@ sub new($) {
   return(bless($self, $class));
 }
 
-=item name()
+=back
 
-my $name = $registry->name();
+=head1 INSTANCE METHODS
+
+=over 4
+
+=item C<name()>
+
+  my $name = $registry->name();
 
 Returns the name of the registry.
 
@@ -64,12 +72,12 @@ sub name($) {
   return($self->{name});
 }
 
-=item add($thing)
+=item C<add($thing)>
 
-eval { $registry->add($thing) } or die $@;
+  eval { $registry->add($thing) } or die $@;
 
-Adds the IPAM::Thing object $thing to the registry.  An exception is
-raised if the lower-case version of the name of $thing (obtained by
+Adds the L<IPAM::Thing> object $thing to the registry.  An exception
+is raised if the lowercase version of the name of $thing (obtained by
 the call lc($thing->name())) is already present in the registry.
 
 =cut
@@ -91,12 +99,12 @@ sub add($$) {
   $self->{lc_map}{$name_lc} = $name;
 }
 
-=item lookup($name)
+=item C<lookup($name)>
 
-my $thing = $registry->lookup('foo');
+  my $thing = $registry->lookup($name);
 
-Returns a reference to the unique IPAM::Thing object stored in the
-registry whose name converted to lower-case matches the lower-case
+Returns a reference to the unique L<IPAM::Thing> object stored in the
+registry whose name converted to lowercase matches the lowercase
 version of $name.  If no such Thing exists, the method returns undef
 or an empty list when called in scalar or list context, respectively.
 
@@ -109,12 +117,12 @@ sub lookup($$) {
   return();
 }
 
-=item iterator($sorter)
+=item C<iterator($sorter)>
 
-my $next = $registry->iterator();
-while (my $thing = $next->()) {
-  print $thing->name()."\n";
-}
+  my $next = $registry->iterator();
+  while (my $thing = $next->()) {
+    print $thing->name()."\n";
+  }
 
 Generates an iterator for all Things in the registry.  This is a
 closure that returns the next Thing each time it is called and returns
@@ -124,8 +132,8 @@ subroutine is called within a sort() statement like this:
 
   sort { $sorter($a, $b) }
 
-where $a and $b are references to IPAM::Thing objects.  By default, no
-sorting is done.  To sort by name, for example, one would use
+where $a and $b are references to L<IPAM::Thing> objects.  By default,
+no sorting is done.  To sort by name, for example, one would use
 
   my @things = $thing->iterator(sub { my ($a, $b) = @_; 
                                       $a->name() cmp $b->name() });
@@ -148,9 +156,11 @@ sub iterator($$) {
 	  });
 }
 
-=item things($sorter)
+=item C<things($sorter)>
 
-my @things = $registry->things();
+  foreach my $thing ($registry->things()) {
+    print $thing->name()."\n";
+  }
 
 Returns a list of all Things stored in the registry.  Usage of the
 $sorter argument is the same as that for the iterator() method.
@@ -166,9 +176,9 @@ sub things($$) {
   }
 }
 
-=item counter()
+=item C<counter()>
 
-my $things = $registry->counter();
+  my $things = $registry->counter();
 
 Returns the number of Things in the registry.
 
@@ -178,5 +188,13 @@ sub counter($) {
   my ($self) = @_;
   return($self->{counter});
 }
+
+=back
+
+=head1 SEE ALSO
+
+L<IPAM::Thing>
+
+=cut
 
 1;
