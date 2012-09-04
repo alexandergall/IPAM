@@ -3,7 +3,7 @@
 #### Description:   IPAM::Thing class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Thing.pm,v 1.4 2012/09/03 12:22:55 gall Exp gall $
+#### RCS $Id: Thing.pm,v 1.5 2012/09/03 15:12:08 gall Exp gall $
 package IPAM::Thing;
 
 =head1 NAME
@@ -12,7 +12,7 @@ IPAM::Thing - Base class for named Things
 
 =head1 SYNOPSIS
 
-use IPAM::Thing;
+  use IPAM::Thing;
 
 =head1 DESCRIPTION
 
@@ -45,9 +45,9 @@ description is initialized to an empty string.
 
 =over 4
 
-=item new($node, $name)
+=item C<new($node, $name)>
 
-my $thing = IPAM::Thing->new($node, $name);
+  my $thing = IPAM::Thing->new($node, $name);
 
 Creates a new thing called $name and associates the
 L<XML::LibXML::Node> object $node with it, which may be undefined if
@@ -67,9 +67,9 @@ sub new($$$) {
 
 =over 4
 
-=item name()
+=item C<name()>
 
-my $name = $thing->name();
+  my $name = $thing->name();
 
 Returns the Thing's name.
 
@@ -80,9 +80,9 @@ sub name($) {
   return($self->{name});
 }
 
-=item node()
+=item C<node()>
 
-my $node = $thing->node();
+  my $node = $thing->node();
 
 Returns a reference to the L<XML::LibXML::Node> object associated with
 the Thing.
@@ -94,9 +94,9 @@ sub node($) {
   return($self->{node});
 }
 
-=item nodeifno()
+=item C<nodeifno()>
 
-my ($file, $line) = $thing->nodeinfo();
+  my ($file, $line) = $thing->nodeinfo();
 
 Returns the file name and line number where the XML node associated
 with the Thing is defined or undef if no node is associated with the
@@ -109,15 +109,15 @@ sub nodeinfo($) {
   return(IPAM::_nodeinfo($self->{node}));
 }
 
-=item description()
+=item C<escription()>
 
-my $description = $thing->description();
+  my $description = $thing->description();
 
 Returns a string that contains free-form text describing the Thing.
 
-=item description($descr)
+=item C<description($descr)>
 
-$thing->description('Foo bar baz');
+  $thing->description('Foo bar baz');
 
 Registers the free-from text $descr as a description of the Thing.
 
