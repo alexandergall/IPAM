@@ -57,12 +57,6 @@ foreach my $item (@ARGV) {
 
 sub name_info($$) {
   my ($fqdn, $indent) = @_;
-  ## Domain names strating with '<' are used by the IPAM for
-  ## addresses that are not associated with real names, e.g.
-  ## <RESERVED> or <no canonical name>.  We silently skip over
-  ## them and hope that no real name starts with this character.
-  $fqdn =~ /^</ and return();
-
   my $recurse_save = $opt{recurse};
   $opt{recurse} > 0 and $opt{recurse}--;
   unless ($fqdn =~ /\.$/) {
@@ -245,9 +239,11 @@ sub print_pf_registry($$$) {
   my $next = $reg->iterator(sub { my ($a, $b) = @_; $b->ip() cmp $a->ip(); },
 			    $af);
   while (my $prefix = $next->()) {
-    indent($indent, sprintf("%-35s  %s\n", $prefix->name(), $prefix->id()));
+    indent($indent, sprintf("%-35s  %-30s %-30s\n", $prefix->name(),
+			    $prefix->id(), $prefix->description()));
     next if ($prefix->is_stub() and $opt{'no-stub-recurse'});
-    if ($prefix->isa('IPAM::Address') and $opt{recurse}) {
+    if ($prefix->isa('IPAM::Address') and $opt{recurse}
+	and $prefix->canonical_host()) {
       name_info($prefix->id(), $indent+1);
     } elsif($opt{recurse}) {
       print_pf_registry($prefix->registry(), $indent+1, $prefix->af());
