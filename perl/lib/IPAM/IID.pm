@@ -3,7 +3,7 @@
 #### Description:   IPAM::IID class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: IID.pm,v 1.3 2012/08/06 15:10:52 gall Exp gall $
+#### RCS $Id: IID.pm,v 1.4 2012/08/23 15:22:35 gall Exp gall $
 
 package IPAM::IID;
 our @ISA = qw(IPAM::Thing);
@@ -15,7 +15,7 @@ IPAM::IID - Class that describes a canonical host
 
 =head1 SYNOPSIS
 
-use IPAM::IID;
+  use IPAM::IID;
 
 =head1 DESCRIPTION
 
@@ -26,14 +26,12 @@ particular IID-to-host mapping.
 
 =over 4
 
-=item new($node, $name, $id)
+=item C<new($node, $name, $id)>
 
-my $iid = eval { IPAM::IID->new($node, $name, $id) } or die $@;
+  my $iid = eval { IPAM::IID->new($node, $name, $id) } or die $@;
 
-The IID $id must be in the form of a IPv6 address and be part of ::/64.
-An exception is raised if these conditions are not met.
-
-=back
+The IID C<$id> must be in the form of a IPv6 address and be part of
+::/64.  An exception is raised if these conditions are not met.
 
 =cut
 
@@ -51,13 +49,15 @@ sub new($$$$) {
   return($self);
 }
 
+=back
+
 =head1 INSTANCE METHODS
 
 =over 4
 
-=item ip()
+=item C<ip()>
 
-my $ip = $iid->ip();
+  my $ip = $iid->ip();
 
 Returns the L<NetAddr::IP> object that represents the IID.
 
@@ -68,26 +68,24 @@ sub ip {
   return($self->{ip});
 }
 
-=item use()
+=item C<use()>
 
-if ($iid->use()) {
-  ##
-}
+  if ($iid->use()) {
+    ##
+  }
 
 Returns a true value if the IID can be used to construct addresses
 for the host, false otherwise.
 
-=back
+=item C<use($use)>
 
-=item use($use)
-
-$iid->use(0);
-$iid->use(1);
+  $iid->use(0);
+  $iid->use(1);
 
 Declares whether the IID can or cannot be used to construct addresses
 for the host if the argument is a true or a false value, respectively.
-By setting this flag to false, the IID is essentially reserved but will
-not be used to create actual addresses.
+By setting this flag to false, the IID is essentially reserved but
+will not be used to create actual addresses.
 
 =cut
 
@@ -97,16 +95,14 @@ sub use($$) {
   return($self->{use});
 }
 
-=item in_use($use)
+=item C<in_use($use)>
 
 Marks the IID as in use if $use is a true value.
 
-=item in_use()
+=item C<in_use()>
 
 Returns true if the IID is in use, i.e. if it is referenced at least
-once from a <ipv6> address assignment via the "from-iid" attribute.
-
-=back
+once from a <ipv6> address assignment via the C<from-iid> attribute.
 
 =cut
 
@@ -115,6 +111,14 @@ sub in_use($$) {
   defined $use and $self->{in_use} = $use;
   return($self->{in_use});
 }
+
+=back
+
+=head1 SEE ALSO
+
+L<IPAM::Thing>, L<NetAddr::IP>
+
+=cut
 
 package IPAM::IID::Registry;
 use IPAM::Registry;
@@ -127,7 +131,7 @@ IPAM::IID::Registry - Class of a registry for L<IPAM::IID> objects
 
 =head1 SYNOPSIS
 
-use IPAM::IID;
+  use IPAM::IID;
 
 =head1 DESCRIPTION
 
@@ -138,12 +142,12 @@ list of IIDs represented as L<IPAM::IID> objects.
 
 =over 4
 
-=item add($iid)
+=item C<add($iid)>
 
-eval { $iid_r->add($iid_new) } or die $@;
+  eval { $iid_r->add($iid_new) } or die $@;
 
-Adds the L<IPAM::IID> object $iid_new to the list IIDs.  An exception is
-raised if a mapping for the same IID already exists.
+Adds the L<IPAM::IID> object C<$iid>_new to the list IIDs.  An
+exception is raised if a mapping for the same IID already exists.
 
 =cut
 
@@ -163,15 +167,13 @@ sub add($$$) {
   $self->SUPER::add($iid_new);
 }
 
-=item lookup_by_ip($ip)
+=item C<lookup_by_ip($ip)>
 
-my $iid = $iid_r->lookup_by_ip($ip);
+  my $iid = $iid_r->lookup_by_ip($ip);
 
 Searches the registry for the IID represented by the L<NetAddr::IP>
-object $ip and returns the corresponding L<IPAM::IID> object or undef
-if no match is found.
-
-=back
+object C<$ip> and returns the corresponding L<IPAM::IID> object or
+undef if no match is found.
 
 =cut
 
@@ -184,5 +186,13 @@ sub lookup_by_ip($$) {
   }
   return(undef);
 }
+
+=back
+
+=head1 SEE ALSO
+
+L<IPAM::Registry>, L<IPAM::IID>, L<NetAddr::IP>
+
+=cut
 
 1;
