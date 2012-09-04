@@ -1,3 +1,10 @@
+####
+#### File name:     zones.rnc
+#### Description:   RelaxNG schema for the IPAM <zones> element
+#### Author:        Alexander Gall <gall@switch.ch>
+#### Created:       Sep 4 2012
+#### RCS $Id$
+####
 start = zones
 
 zones = element zones {

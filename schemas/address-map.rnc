@@ -1,3 +1,11 @@
+####
+#### File name:     address-map.rnc
+#### Description:   RelaxNG schema for the IPAM <address-map> element
+#### Author:        Alexander Gall <gall@switch.ch>
+#### Created:       Sep 4 2012
+#### RCS $Id$
+####
+
 start = address-map
 
 address-map = element address-map {
