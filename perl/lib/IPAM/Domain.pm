@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.4 2012/08/22 15:03:18 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.5 2012/08/29 14:12:57 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -14,7 +14,7 @@ IPAM::Domain - Class that describes a DNS domain within a zone
 
 =head1 SYNOPSIS
 
-use IPAM::Domain;
+  use IPAM::Domain;
 
 =head1 DESCRIPTION
 
@@ -27,13 +27,11 @@ domain name relative to the name of the zone to which it belongs.
 
 =over 4
 
-=item new($node, $name, $zone)
+=item C<new($node, $name, $zone)>
 
-my $domain = IPAM::Domain->new($node, $name, $zone);
+  my $domain = IPAM::Domain->new($node, $name, $zone);
 
 Associates the L<IPAM::Zone> object with the domain.
-
-=back
 
 =cut
 
@@ -44,13 +42,15 @@ sub new($$$) {
   return($self);
 }
 
+=back
+
 =head1 INSTANCE METHODS
 
 =over 4
 
-=item fqdn()
+=item C<fqdn()>
 
-my $fqdn = $domain->fqdn();
+  my $fqdn = $domain->fqdn();
 
 Returns the fully qualified domain name of the object, which is the
 catenation of its own name with the name of its associated
@@ -63,18 +63,19 @@ sub fqdn($) {
   return(join('.', $self->name(), $self->{zone}->name()));
 }
 
-=item add_rr($node, $ttl, $type, $rdata, $comment, $dns)
+=item C<add_rr($node, $ttl, $type, $rdata, $comment, $dns)>
 
 $domain->add_rr($node, $ttl, $type, $rdata, $comment, $dns);
 
-Adds the resource record <$type, $rdata> with given $ttl to the RRsets
-associated with the domain.  $node is a L<XML::LibXML::Node> object
-from which the RR is derived.  The $comment is included as actual
-comment in the output of the RR by the print() method.  If $dns is
-false, the data is recorded but will not be output by the print()
-method (or printed as comment only).  A warning is printed if the
-RRset of type $type already exists but has a different TTL than $ttl.
-In that case, the existing TTL takes precedence.
+Adds the resource record C>> <$type, $rdata> >> with given C<$ttl> to
+the RRsets associated with the domain.  C<$node> is a
+L<XML::LibXML::Node> object from which the RR is derived.  The
+C<$comment> is included as actual comment in the output of the RR by
+the C<print()> method.  If C<$dns> is false, the data is recorded but
+will not be output by the C<print()> method (or printed as comment
+only).  A warning is printed if the RRset of type C<$type> already
+exists but has a different TTL than C<$ttl>.  In that case, the
+existing TTL takes precedence.
 
 =cut
 
@@ -107,19 +108,20 @@ sub add_rr($$$$$$$) {
 				       node => $node});
 }
 
-=item print($FILEH, $indent, $annotate)
+=item C<print($FILEH, $indent, $annotate)>
 
 $domain->print(\*STDOUT, 0);
 
 Print all RRsets in valid (but not canonical) master file syntax to
-the filehandle referred by $FILEH.  If $indent is an integer, that
-number of spaces is prepended to each output line. If $annotate is true,
-each RR is accompanied with a comment containing the file name and line
-number of the IPAM XML element from which the data was derived.
+the filehandle referred by C<$FILEH>.  If C<$indent> is an integer,
+that number of spaces is prepended to each output line. If
+C<$annotate> is true, each RR is accompanied with a comment containing
+the file name and line number of the IPAM XML element from which the
+data was derived.
 
 =cut
 
-sub print($$$) {
+sub print($$$$) {
   my ($self, $FILE, $n, $annotate) = @_;
   my $name = $self->name() ? $self->name() : '@';
   my $indent = (defined $n and $n =~ /^\d+$/) ? ' 'x$n : '';
@@ -155,23 +157,24 @@ sub print($$$) {
   }
 }
 
-=item types()
+=item C<types()>
 
-$types = $domain->types();  
+  my $types = $domain->types();
 
 Returns a list of RR types associated with the domain.
 
 =cut
+
 sub types($) {
   my ($self) = @_;
   return(keys(%{$self->{types}}));
 }
 
-=item exists_rrset($type)
+=item C<exists_rrset($type)>
 
-my $exists = $domain->exists_rrset('A');
+  my $exists = $domain->exists_rrset('A');
 
-Returns true if a RRset of type $type exists, false if not.
+Returns true if a RRset of type C<$type> exists, false if not.
 
 =cut
 
@@ -180,6 +183,14 @@ sub exists_rrset($$) {
   return(exists $self->{types}{$type});
 
 }
+
+=back
+
+=head1 SEE ALSO
+
+L<IPAM::Thing>, L<IPAM::Zone>
+
+=cut
 
 package IPAM::Domain::Registry;
 our @ISA = qw(IPAM::Registry);
