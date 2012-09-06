@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.8 2012/09/06 10:23:41 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.9 2012/09/06 10:27:26 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -93,7 +93,8 @@ sub add_rr($$$$$$$) {
   my $key = 'types';
   $type = uc($type);
   if ($dns) {
-    (($type eq 'CNAME' and $self->types() != 0) or
+    (($type eq 'CNAME' && $self->types() != 0
+      && not $self->exists_rrset($type)) or
      ($type ne 'CNAME' and grep { $_ eq 'CNAME' } $self->types)) and
        die $self->fqdn()
 	 .": mixing of CNAME with other record types not allowed\n";
