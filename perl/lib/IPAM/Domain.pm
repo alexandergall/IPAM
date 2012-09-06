@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.6 2012/09/04 13:26:47 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.7 2012/09/06 09:05:21 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -93,6 +93,10 @@ sub add_rr($$$$$$$) {
   my $key = 'types';
   $type = uc($type);
   if ($dns) {
+    (($type eq 'CNAME' and $self->types() != 0) or
+     ($type ne 'CNAME' and grep { $_ eq 'CNAME' } $self->types)) and
+       die $self->fqdn()
+	 .": mixing of CNAME with other record types not allowed\n";
     if ($self->exists_rrset($type)) {
       if ($type eq 'CNAME') {
 	my ($file, $line) =
@@ -109,12 +113,11 @@ sub add_rr($$$$$$$) {
       ## Create a new RRset
       $self->{types}{$type}{ttl} = $ttl;
     }
-    (($type eq 'CNAME' and $self->types() == 0) or
-     ($type ne 'CNAME' and grep { $_ eq 'CNAME' } $self->types)) and
-       die $self->fqdn()
-	 .": mixing of CNAME with other record types not allowed\n";
   } else {
     $key = 'types_i';
+    ## We simply overwrite the TTL of inactive RRsets.  Mismatches
+    ## are caught for active RRsets only.
+    $self->{$key}{$type}{ttl} = $ttl;
   }
   push(@{$self->{$key}{$type}{rr}}, { rdata => $rdata,
 				      comment => $comment,
@@ -166,7 +169,7 @@ sub print($$$$) {
 	print $FILE "\n";
 	## The owner name is only printed for the first RR unless
 	## it happens to be commented out ("inactive").
-      $rr->{dns} and $name = '';
+	$rr->{dns} and $name = '';
       }
     }
   }
