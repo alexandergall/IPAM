@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.5 2012/08/29 14:12:57 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.6 2012/09/04 13:26:47 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -65,47 +65,61 @@ sub fqdn($) {
 
 =item C<add_rr($node, $ttl, $type, $rdata, $comment, $dns)>
 
-$domain->add_rr($node, $ttl, $type, $rdata, $comment, $dns);
+  eval { $domain->add_rr($node, $ttl, $type, $rdata, $comment, $dns) }
+    or die $@;
 
 Adds the resource record C>> <$type, $rdata> >> with given C<$ttl> to
 the RRsets associated with the domain.  C<$node> is a
 L<XML::LibXML::Node> object from which the RR is derived.  The
 C<$comment> is included as actual comment in the output of the RR by
-the C<print()> method.  If C<$dns> is false, the data is recorded but
-will not be output by the C<print()> method (or printed as comment
-only).  A warning is printed if the RRset of type C<$type> already
-exists but has a different TTL than C<$ttl>.  In that case, the
-existing TTL takes precedence.
+the C<print()> method.
+
+If the record is of type CNAME, exceptions are raised if either a
+CNAME or a record of any other type already exists.
+
+If the record is not of type CNAME and the RRset already exists, it is
+checked whether C<$ttl> matches the TTL of the RRset.  If this is not
+the case, a warning is issued and C<$ttl> is ignored in favor of the
+TTL of the existing RRset.
+
+If C<$dns> is a false value, the data is recorded but will not be
+output by the C<print()> method (or printed as comment only).  In
+addition, none of the checks regarding CNAMEs and TTLs are performed.
 
 =cut
 
 sub add_rr($$$$$$$) {
   my ($self, $node, $ttl, $type, $rdata, $comment, $dns) = @_;
+  my $key = 'types';
   $type = uc($type);
-  if ($self->exists_rrset($type)) {
-    if ($type eq 'CNAME') {
-      my ($file, $line) =
-	IPAM::_nodeinfo((@{$self->{types}{$type}{rr}})[0]->{node});
-      die $self->fqdn().": multiple CNAME records not allowed"
-	." (conflicts with definition at $file, $line)\n";
+  if ($dns) {
+    if ($self->exists_rrset($type)) {
+      if ($type eq 'CNAME') {
+	my ($file, $line) =
+	  IPAM::_nodeinfo((@{$self->{types}{$type}{rr}})[0]->{node});
+	die $self->fqdn().": multiple CNAME records not allowed"
+	  ." (conflicts with definition at $file, $line)\n";
+      }
+      my $rrset_ttl = $self->{types}{$type}{ttl};
+      $rrset_ttl eq $ttl or
+	warn $self->fqdn().": TTL ".($ttl ? $ttl : '<default>')." of new $type RR"
+	  ." differs from TTL ".($rrset_ttl ? $rrset_ttl : '<default>')
+	    ." of existing RRset, ignoring new value.\n";
+    } else {
+      ## Create a new RRset
+      $self->{types}{$type}{ttl} = $ttl;
     }
-    my $rrset_ttl = $self->{types}{$type}{ttl};
-    $rrset_ttl eq $ttl or
-      warn $self->fqdn().": TTL ".($ttl ? $ttl : '<default>')." of new $type RR"
-    	." differs from TTL ".($rrset_ttl ? $rrset_ttl : '<default>')
-	  ." of existing RRset, ignoring new value.\n";
+    (($type eq 'CNAME' and $self->types() == 0) or
+     ($type ne 'CNAME' and grep { $_ eq 'CNAME' } $self->types)) and
+       die $self->fqdn()
+	 .": mixing of CNAME with other record types not allowed\n";
   } else {
-    ## Create a new RRset
-    $self->{types}{$type}{ttl} = $ttl;
+    $key = 'types_i';
   }
-  (($type eq 'CNAME' and $self->types() == 0) or
-   ($type ne 'CNAME' and grep { $_ eq 'CNAME' } $self->types)) and
-     die $self->fqdn()
-      .": mixing of CNAME with other record types not allowed\n";
-  push(@{$self->{types}{$type}{rr}}, { rdata => $rdata,
-				       comment => $comment,
-				       dns => $dns,
-				       node => $node});
+  push(@{$self->{$key}{$type}{rr}}, { rdata => $rdata,
+				      comment => $comment,
+				      dns => $dns,
+				      node => $node});
 }
 
 =item C<print($FILEH, $indent, $annotate)>
@@ -125,35 +139,36 @@ sub print($$$$) {
   my ($self, $FILE, $n, $annotate) = @_;
   my $name = $self->name() ? $self->name() : '@';
   my $indent = (defined $n and $n =~ /^\d+$/) ? ' 'x$n : '';
-  foreach my $type (keys(%{$self->{types}})) {
-     my $rrset = \%{$self->{types}{$type}};
-    my $ttl = defined $rrset->{ttl} ? $rrset->{ttl} : '';
-     my %rdata;
-    foreach my $rr (@{$rrset->{rr}}) {
-      ## Suppress duplicates.  They are expected for PTR and
-      ## LOC but less so for other types.
-      if (exists $rdata{$rr->{rdata}}) {
-	($type ne 'PTR' and $type ne 'LOC') and
-	  warn "BUG: skipping unexpected duplicate RR: $type ".$rr->{rdata}
-	    ."\n";
-	next;
-      }
-      $rdata{$rr->{rdata}} = 1;
-      printf $FILE ("$indent%s%-30s %6s IN %-8s %-s",
-		    $rr->{dns} ? '' : '; <inactive> ',
-    		    $name, $rrset->{ttl}, $type, $rr->{rdata});
-      defined $rr->{comment} and print $FILE " ; ".$rr->{comment};
-      if (defined $annotate and $annotate) {
-	my ($file, $line) = IPAM::_nodeinfo($rr->{node});
-	defined $file and
-	  print $FILE (" ; $file:$line");
-      }
-      print $FILE "\n";
-      ## The owner name is only printed for the first RR unless
-      ## it happens to be commented out ("inactive").
+  foreach my $key (qw/types types_i/) {
+    foreach my $type (keys(%{$self->{$key}})) {
+      my $rrset = \%{$self->{$key}{$type}};
+      my $ttl = defined $rrset->{ttl} ? $rrset->{ttl} : '';
+      my %rdata;
+      foreach my $rr (@{$rrset->{rr}}) {
+	## Suppress duplicates.  They are expected for PTR and
+	## LOC but less so for other types.
+	if (exists $rdata{$rr->{rdata}}) {
+	  ($type ne 'PTR' and $type ne 'LOC') and
+	    warn "BUG: skipping unexpected duplicate RR: $type ".$rr->{rdata}
+	      ."\n";
+	  next;
+	}
+	$rdata{$rr->{rdata}} = 1;
+	printf $FILE ("$indent%s%-30s %6s IN %-8s %-s",
+		      $rr->{dns} ? '' : '; <inactive> ',
+		      $name, $rrset->{ttl}, $type, $rr->{rdata});
+	defined $rr->{comment} and print $FILE " ; ".$rr->{comment};
+	if (defined $annotate and $annotate) {
+	  my ($file, $line) = IPAM::_nodeinfo($rr->{node});
+	  defined $file and
+	    print $FILE (" ; $file:$line");
+	}
+	print $FILE "\n";
+	## The owner name is only printed for the first RR unless
+	## it happens to be commented out ("inactive").
       $rr->{dns} and $name = '';
+      }
     }
-
   }
 }
 
