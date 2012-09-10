@@ -3,7 +3,7 @@
 #### Description:   RelaxNG schema for the IPAM <ipam-base> element
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Sep 4 2012
-#### RCS $Id$
+#### RCS $Id: ipam.rnc,v 1.5 2012/09/04 14:05:02 gall Exp gall $
 ####
 datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
 namespace xi = "http://www.w3.org/2001/XInclude"
@@ -18,6 +18,11 @@ start |= ipam-base
 ipam-base = element ipam-base {
    element domain { text },
    element ttl { xsd:int }?,
+   (alternatives |
+      element xi:include {
+         attribute href { text },
+         empty
+      }),
    (address-map |
       element xi:include {
          attribute href { text },
@@ -46,6 +51,9 @@ ipam-base = element ipam-base {
 ## self-contained for partial validation in an editor.  The
 ## redefinitions here effectively ignore these elements, leaving only
 ## the real start element (ipam-base).
+include "alternatives.rnc" {
+   start |= notAllowed
+}
 include "address-map.rnc" {
    start |= notAllowed
 }
