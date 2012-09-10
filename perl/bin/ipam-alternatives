@@ -1,0 +1,93 @@
+#!/usr/bin/perl
+
+my $base_dir;
+BEGIN {
+  $base_dir = '/home/noc/IPAM';
+  if (exists $ENV{IPAM_BASE}) {
+    $base_dir = $ENV{IPAM_BASE};
+  }
+}
+use strict;
+use warnings;
+use lib "$base_dir/lib/perl5";
+use IPAM 0.01;
+use Getopt::Long;
+
+my %opt = ();
+my $indent_unit = 2;
+
+sub indent($$);
+sub show_alt($);
+
+sub usage() {
+  print <<"EOF";
+usage: $0
+EOF
+  exit(1);
+}
+
+GetOptions(\%opt)
+  or usage();
+my $file = "$base_dir/ipam.xml";
+system("cd $base_dir && make --silent validate") == 0 or die;
+my $ipam = IPAM->new({ verbose => undef, base_dir => $base_dir,
+		       validate => undef, warnings => undef });
+$ipam->load($file);
+if (@ARGV) {
+  foreach my $arg (@ARGV) {
+    unless (my $alt = $ipam->registry(IPAM::REG_ALTERNATIVE)->lookup($arg)) {
+      print STDERR "Unknown alternative \"$arg\".\n";
+      print STDERR "Available alternatives: ".
+	join(', ', map { $_->name() } 
+	     $ipam->registry(IPAM::REG_ALTERNATIVE)->things()).".\n";
+      exit(1);
+    } else {
+      show_alt($alt);
+    }
+  }
+} else {
+  map { show_alt($_) } $ipam->registry(IPAM::REG_ALTERNATIVE)->things();
+}
+
+sub show_alt($) {
+  my ($alt) = @_;
+ indent(0, "\nAlternative \"".$alt->name."\":\n");
+  my @states = $alt->allowed_states();
+  my $state = $alt->state();
+  indent(1, "Allowed states: ".join(', ', @states)."\n");
+  indent(1, "Active state  : $state\n");
+  foreach my $state (@states) {
+    my %hosts;
+    indent(1,"Mappings for state \"$state\":\n");
+    foreach my $ref ($alt->mappings($state)) {
+      foreach my $type (keys(%$ref)) {
+	foreach my $mapping (@{$ref->{$type}}) {
+	  push(@{$hosts{@$mapping[0]->name()}{$type}}, @$mapping[1])
+	}
+      }
+    }
+    foreach my $host (sort keys(%hosts)) {
+      foreach my $type (keys(%{$hosts{$host}})) {
+	my @things = @{$hosts{$host}{$type}};
+	if ($type eq IPAM::Alternative::MAP_ADDRESS) {
+	  map { indent(3, sprintf("%-30s %-19s %s\n", $host, 'has address',
+				  $_->name())) } @things;
+	} elsif ($type eq IPAM::Alternative::MAP_ALIAS) {
+	  map { indent(3, sprintf("%-30s %-19s %s\n", $host, 'has alias',
+				  $_->name())) } @things;
+	} elsif ($type eq IPAM::Alternative::MAP_RR) {
+	  map { indent(3, sprintf("%-30s %-19s %s\n", $host,
+				  'has resource record',
+				  $_->getAttribute('type'))) } @things;
+	} else {
+	  die "BUG: unknonwn alternative type $type";
+	}
+      }
+    }
+  }
+}
+
+sub indent($$) {
+  my ($level, $msg) = @_;
+  print ' 'x($level*$indent_unit).$msg;
+}
