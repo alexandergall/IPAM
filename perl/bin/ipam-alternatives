@@ -70,14 +70,13 @@ sub show_alt($) {
       foreach my $type (keys(%{$hosts{$host}})) {
 	my @things = @{$hosts{$host}{$type}};
 	if ($type eq IPAM::Alternative::MAP_ADDRESS) {
-	  map { indent(3, sprintf("%-30s %-19s %s\n", $host, 'has address',
+	  map { indent(3, sprintf("Address: %-35s %s\n", $host,
 				  $_->name())) } @things;
 	} elsif ($type eq IPAM::Alternative::MAP_ALIAS) {
-	  map { indent(3, sprintf("%-30s %-19s %s\n", $host, 'has alias',
-				  $_->name())) } @things;
+	  map { indent(3, sprintf("Alias  : %-35s %s\n", $_->name(),
+				  $host)) } @things;
 	} elsif ($type eq IPAM::Alternative::MAP_RR) {
-	  map { indent(3, sprintf("%-30s %-19s %s\n", $host,
-				  'has resource record',
+	  map { indent(3, sprintf("Resource Record: %-35s %s\n", $host,
 				  $_->getAttribute('type'))) } @things;
 	} else {
 	  die "BUG: unknonwn alternative type $type";
