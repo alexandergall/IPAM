@@ -3,7 +3,7 @@
 #### Description:   IPAM::Network class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Network.pm,v 1.5 2012/08/31 09:52:56 gall Exp gall $
+#### RCS $Id: Network.pm,v 1.6 2012/09/04 13:19:10 gall Exp gall $
 
 package IPAM::Network;
 use IPAM::Thing;
@@ -227,11 +227,10 @@ have at most one canonical name.
 
 sub find_alias($$) {
   my ($self, $fqdn) = @_;
-  my $next = $self->{host_r}->iterator();
-  while (my $host = $next->()) {
-    ($host->alias_registry()->lookup($fqdn)) and return($host);
-  }
-  return(undef);
+  my @result;
+  map { push(@result, $_) if $_->alias_registry()->lookup($fqdn) }
+    $self->{host_r}->things();
+  return(@result);
 }
 
 =back
@@ -295,12 +294,9 @@ canonical name or undef if such alias exists.
 
 sub find_alias($$) {
   my ($self, $fqdn) = @_;
-  my $next = $self->iterator();
-  while (my $network = $next->()) {
-    my $host = $network->find_alias($fqdn);
-    return($host) if $host;
-  }
-  return(undef);
+  my @result;
+  map { push(@result, $_->find_alias($fqdn)) } $self->things();
+  return(@result);
 }
 
 =back
