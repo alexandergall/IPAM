@@ -1,10 +1,10 @@
-##
-## File name:     alternatives.rnc
-## Description:   RelaxNG schema for the IPAM <alternatives> element
-## Author:        Alexander Gall <gall@switch.ch>
-## Created:       Sep 4 2012
-## RCS $Id: alternatives.rnc,v 1.1 2012/09/10 14:53:43 gall Exp gall $
-##
+# ##
+# ## File name:     alternatives.rnc
+# ## Description:   RelaxNG schema for the IPAM <alternatives> element
+# ## Author:        Alexander Gall <gall@switch.ch>
+# ## Created:       Sep 4 2012
+# ## RCS $Id: alternatives.rnc,v 1.2 2012/09/10 15:15:26 gall Exp gall $
+# ##
 datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
 
 start = alternatives

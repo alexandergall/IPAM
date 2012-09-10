@@ -1,10 +1,10 @@
-####
-#### File name:     network.rnc
-#### Description:   RelaxNG schema for the IPAM <networks> element
-#### Author:        Alexander Gall <gall@switch.ch>
-#### Created:       Sep 4 2012
-#### RCS $Id: network.rnc,v 1.9 2012/09/04 14:05:41 gall Exp gall $
-####
+# ##
+# ## File name:     network.rnc
+# ## Description:   RelaxNG schema for the IPAM <networks> element
+# ## Author:        Alexander Gall <gall@switch.ch>
+# ## Created:       Sep 4 2012
+# ## RCS $Id: network.rnc,v 1.10 2012/09/10 14:54:14 gall Exp gall $
+# ##
 datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
 namespace a = "http://relaxng.org/ns/compatibility/annotations/1.0"
 
