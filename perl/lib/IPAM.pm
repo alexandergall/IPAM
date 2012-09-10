@@ -136,6 +136,7 @@ use NetAddr::IP::Util qw(add128 ipv6_n2x);
 use File::Basename;
 use IPAM::Thing;
 use IPAM::Registry;
+use IPAM::Alternative;
 use IPAM::IID;
 use IPAM::AddressMap;
 use IPAM::Prefix;
@@ -154,6 +155,7 @@ our %af_info = ( 4 => { name => 'ipv4', max_plen => 32, rrtype => 'A', },
 use constant { REG_ZONE => 'zone',
 	       REG_IID => 'iid',
 	       REG_NETWORK => 'network',
+	       REG_ALTERNATIVE => 'alternative',
 	     };
 
 my %default_options = ( verbose => undef,
@@ -168,6 +170,8 @@ my %registries = ( IPAM::REG_ZONE => { key => 'zone_r',
 				     module => 'IPAM::IID::Registry' },
 		   IPAM::REG_NETWORK => { key => 'network_r',
 					  module => 'IPAM::Network::Registry' },
+		   IPAM::REG_ALTERNATIVE => { key => 'alternative_r',
+					      module => 'IPAM::Alternative::Registry' },
 		 );
 
 =head1 CLASS METHODS
@@ -246,6 +250,7 @@ sub load($$) {
   map { $self->{$registries{$_}{key}} = $registries{$_}{module}->new() }
     keys(%registries);
 
+  $self->_register_alternatives($xpc->findnodes('alternatives/alternative'));
   $self->_register_zones($xpc->findvalue('zones/@base'),
 			 $xpc->findnodes('zones/zone'));
   $self->_register_address_map($ttl, $domain,
@@ -425,6 +430,7 @@ sub load($$) {
 				      ."IPv6 address from IID failed: requires "
 				      ."a /64, but conflicts with $af "
 				      . $prefix->name());
+		my ($active, $alt, $state) = $self->_check_alternative($af_node);
 		push(@addrs, { af => $af,
 			       text => ipv6_n2x((add128($ip->aton(),
 							$iid->ip()->aton()))[1]),
@@ -432,7 +438,8 @@ sub load($$) {
 			       canonical => $canonical_af,
 			       reverse => $canonical_af eq 'true' ?
 			       $reverse_af : 'false',
-			       dns => 1});
+			       alt => [ $alt, $state ],
+			       dns => $active});
 		$iid->in_use(1);
 	      }
 	    }
@@ -450,12 +457,14 @@ sub load($$) {
 					     $reverse_af);
 	  $canonical_a eq 'false' and $reverse_a = 'false';
 	  my $dns_a = _attr_with_default($a_node, 'dns', 'true');
+	  my ($active, $alt, $state) = $self->_check_alternative($a_node);
 	  push(@addrs, { af => $af,
 			 text => $a_node->textContent(),
 			 node => $a_node,
 			 canonical => $canonical_a,
 			 reverse => $reverse_a,
-			 dns => ($host->dns() and $dns_a eq 'true') });
+			 alt => [ $alt, $state ],
+			 dns => ($host->dns() && $dns_a eq 'true') && $active});
 	}
 
 	foreach my $addr (@addrs) {
@@ -475,6 +484,9 @@ sub load($$) {
 	  }
 	  eval { $host->add_address($address) } or
 	    $self->_die_at_node($addr->{node}, $@);
+	  my ($alt, $state) = @{$addr->{alt}};
+	  $alt && $alt->add_mapping($state, IPAM::Alternative::MAP_ADDRESS,
+				    $host, $address);
 	  $addr->{canonical} eq 'true' and
 	    (eval { $address->canonical_host($host) } or
 	     $self->_die_at_node($addr->{node}, $@));
@@ -507,11 +519,14 @@ sub load($$) {
 						 $domain);
 	$self->_verbose("Registering host $alias_fqdn as alias for "
 			."$host_fqdn\n");
-	eval { $host->add_alias(IPAM::Thing->new($alias_node, $alias_fqdn)) }
-	  or $self->_die_at_node($alias_node, $@);
+	my $alias = IPAM::Thing->new($alias_node, $alias_fqdn);
+	eval { $host->add_alias($alias) } or $self->_die_at_node($alias_node, $@);
+	my ($active, $alt, $state) = $self->_check_alternative($alias_node);
+	$alt && $alt->add_mapping($state, IPAM::Alternative::MAP_ALIAS,
+				  $host, $alias);
 	eval { $self->{zone_r}->add_rr($alias_node, $alias_fqdn, $alias_ttl,
 				       'CNAME', $host_fqdn,
-				       undef, $host->dns()) } or
+				       undef, $host->dns() && $active) } or
 					 $self->_die_at_node($alias_node, $@);
 	$alias_cache{lc($alias_fqdn)} = $host;
       }
@@ -540,8 +555,11 @@ sub load($$) {
 	my $type = $rr_node->getAttribute('type');
 	my $rr_ttl = _ttl($rr_node, $host_ttl);
 	(my $rdata = $rr_node->textContent()) =~ s/^\s*(.*?)\s*$/$1/;
-	$self->{zone_r}->add_rr($rr_node, $host_fqdn, $rr_ttl, $type,
-				$rdata, undef, $host->dns);
+	my ($active, $alt, $state) = $self->_check_alternative($rr_node);
+	$alt && $alt->add_mapping($state, IPAM::Alternative::MAP_RR,
+				  $host, $rr_node);
+	$self->{zone_r}->add_rr($rr_node, $host_fqdn, $rr_ttl,
+				$type, $rdata, undef, $host->dns && $active);
       }
       $host_cache{lc($host_fqdn)} = $host;
     }
@@ -697,6 +715,40 @@ sub _warn_at_node($$$) {
 sub _die_at_node($$$) {
   my ($self, $node, $msg) = @_;
   $self->_at_node($node, $msg, undef);
+}
+
+sub _register_alternatives($@) {
+  my ($self, @nodes) = @_;
+  foreach my $node (@nodes) {
+    my $label = $node->getAttribute('label');
+    my $state = $node->getAttribute('state');
+    my @allowed_states;
+    map { push(@allowed_states, $_->textContent()) }
+	    $node->findnodes('allowed-state');
+    my $alt = IPAM::Alternative->new($node, $label, @allowed_states);
+    eval { $alt->state($state) } or
+      ($@ and $self->_die_at_node($node, $@));
+    eval { $self->{alternative_r}->add($alt) } or
+      $self->_die_at_node($node, $@);
+  }
+}
+
+sub _check_alternative($$) {
+  my ($self, $node) = @_;
+  my ($active, $alt) = (1, undef);
+  my ($label, $state);
+  if (my $value = $node->getAttribute('alternative')) {
+    (($label, $state) = split(':', $value)) == 2 or
+      $self->_die_at_node($node, "Malformed alternative "
+			  ."specifier ".'"'.$value.'"'."\n");
+    $alt = $self->{alternative_r}->lookup($label) or
+      $self->_die_at_node($node, "Unknown alternative ".'"'.$label.'"'."\n");
+    $active = $alt->check_state($state);
+    defined $active or
+      $self->_die_at_node($node, 'Illegal state "'.$state.'"'
+			  ." for alternative ".'"'.$label.'"'."\n");
+  }
+  return($active, $alt, $state);
 }
 
 ### Populate the zone registry from the zone definitions.
@@ -877,7 +929,7 @@ sub nameinfo($$) {
   }
   push(@{$info{block}}, $self->{address_map}->lookup_by_id($fqdn));
   push(@{$info{host}}, $self->{network_r}->find_host($fqdn));
-  $info{alias} = $self->{network_r}->find_alias($fqdn);
+  push(@{$info{alias}}, $self->{network_r}->find_alias($fqdn));
   return(\%info);
 }
 

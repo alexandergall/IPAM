@@ -122,9 +122,13 @@ sub name_info($$) {
 		   ((defined $canonical_host and $canonical_host == $host) ?
 		    'the canonical' : 'a')." name for the address "
 		   .$address->name()."\n");
+	    alternatives($indent+1, IPAM::Alternative::MAP_ADDRESS,
+			 $host, $address);
 	    $opt{recurse} and prefix_info($address->ip(), $indent+2);
 	  }
 	  map { indent($indent+1, $_->name()." is an alias for the host.\n");
+		alternatives($indent+1, IPAM::Alternative::MAP_ALIAS,
+			     $host, $_);
 		$opt{recurse} and name_info($_->name(), $indent+2); }
 	    $host->aliases();
 	  map { indent($indent+1, "It is hosted on ".$_->name()."\n");
@@ -134,10 +138,14 @@ sub name_info($$) {
       }
     }
     if ($info->{alias}) {
-      indent($indent, "Is an alias for the host "
-	     .$info->{alias}->name() ."\n");
-      detail($info->{alias}->alias_registry()->lookup($fqdn), $indent+1);
-      $opt{recurse} and name_info($info->{alias}->name(), $indent+1);
+      foreach my $host (@{$info->{alias}}) {
+	indent($indent, "Is an alias for the host "
+	       .$host->name() ."\n");
+	alternatives($indent, IPAM::Alternative::MAP_ALIAS,
+		     $host, $host->alias_registry()->lookup($fqdn));
+	detail($host->alias_registry()->lookup($fqdn), $indent+1);
+	$opt{recurse} and name_info($host->name(), $indent+1);
+      }
     }
     my ($zone, $rel_name) = $ipam->registry(IPAM::REG_ZONE)->lookup_fqdn($fqdn);
     if ($zone) {
@@ -186,8 +194,12 @@ sub prefix_info($$) {
 	  } else {
 	    indent($indent+1, "It has no canonical name.\n");
 	  }
-	  map { indent($indent+1, "It is assigned to the host ".$_->name()."\n");
-		$opt{recurse} and name_info($_->name(), $indent+2) } $prefix->hosts();
+	  map { indent($indent+1, "It is assigned to the host ".
+		       $_->name()."\n");
+		alternatives($indent+2, IPAM::Alternative::MAP_ADDRESS,
+			     $_, $prefix);
+		$opt{recurse} and name_info($_->name(), $indent+2) }
+	    $prefix->hosts();
 	} else {
 	  if (my $network = $prefix->network()) {
 	    indent($indent, $prefix->name()." is assigned to the subnet "
@@ -250,6 +262,15 @@ sub print_pf_registry($$$) {
     }
   }
   $opt{recurse} = $recurse_save;
+}
+
+sub alternatives($$$) {
+  my ($indent, $type, $host, $thing) = @_;
+  if (my ($alt, $state) = $ipam->registry(IPAM::REG_ALTERNATIVE)
+      ->find_mapping($type, $host, $thing)) {
+    indent($indent+1, "Alternative ".$alt->name().": "
+    	   ."$state/".($alt->check_state($state) ? 'active' : 'inactive')."\n")
+  }
 }
 
 ## Local Variables:
