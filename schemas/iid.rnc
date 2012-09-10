@@ -1,10 +1,10 @@
-####
-#### File name:     iid.rnc
-#### Description:   RelaxNG schema for the IPAM <interface-identifiers> element
-#### Author:        Alexander Gall <gall@switch.ch>
-#### Created:       Sep 4 2012
-#### RCS $Id$
-####
+##
+## File name:     iid.rnc
+## Description:   RelaxNG schema for the IPAM <interface-identifiers> element
+## Author:        Alexander Gall <gall@switch.ch>
+## Created:       Sep 4 2012
+## RCS $Id: iid.rnc,v 1.4 2012/09/04 14:04:22 gall Exp gall $
+##
 
 datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
 namespace a = "http://relaxng.org/ns/compatibility/annotations/1.0"
