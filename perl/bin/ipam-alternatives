@@ -39,7 +39,7 @@ if (@ARGV) {
       print STDERR "Unknown alternative \"$arg\".\n";
       print STDERR "Available alternatives: ".
 	join(', ', map { $_->name() } 
-	     $ipam->registry(IPAM::REG_ALTERNATIVE)->things()).".\n";
+	     $ipam->registry(IPAM::REG_ALTERNATIVE)->things())."\n";
       exit(1);
     } else {
       show_alt($alt);
