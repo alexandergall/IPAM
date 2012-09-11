@@ -26,7 +26,7 @@ EOF
   exit(1);
 }
 
-GetOptions(\%opt)
+GetOptions(\%opt, 'detail')
   or usage();
 my $file = "$base_dir/ipam.xml";
 system("cd $base_dir && make --silent validate") == 0 or die;
@@ -60,26 +60,31 @@ sub show_alt($) {
     my %hosts;
     indent(1,"Mappings for state \"$state\":\n");
     foreach my $ref ($alt->mappings($state)) {
-      foreach my $type (keys(%$ref)) {
-	foreach my $mapping (@{$ref->{$type}}) {
-	  push(@{$hosts{@$mapping[0]->name()}{$type}}, @$mapping[1])
+      foreach my $type (IPAM::Alternative::MAP_ALIAS,
+			IPAM::Alternative::MAP_ADDRESS,
+			IPAM::Alternative::MAP_RR) {
+	next unless exists $ref->{$type};
+	### Sort by hostname, except for type alias, which is sorted
+	### by the name of the alias.
+	my $sub = sub { @$a[0]->name() cmp @$b[0]->name() };
+	if ($type eq IPAM::Alternative::MAP_ALIAS) {
+	  $sub = sub { @$a[1]->name() cmp @$b[1]->name() };
 	}
-      }
-    }
-    foreach my $host (sort keys(%hosts)) {
-      foreach my $type (keys(%{$hosts{$host}})) {
-	my @things = @{$hosts{$host}{$type}};
-	if ($type eq IPAM::Alternative::MAP_ADDRESS) {
-	  map { indent(3, sprintf("Address: %-35s %s\n", $host,
-				  $_->name())) } @things;
-	} elsif ($type eq IPAM::Alternative::MAP_ALIAS) {
-	  map { indent(3, sprintf("Alias  : %-35s %s\n", $_->name(),
-				  $host)) } @things;
-	} elsif ($type eq IPAM::Alternative::MAP_RR) {
-	  map { indent(3, sprintf("Resource Record: %-35s %s\n", $host,
-				  $_->getAttribute('type'))) } @things;
-	} else {
-	  die "BUG: unknonwn alternative type $type";
+	foreach my $mapping (sort $sub @{$ref->{$type}}) {
+	  my ($host, $object) = @$mapping;
+	  if ($type eq IPAM::Alternative::MAP_ADDRESS) {
+	    indent(3, sprintf("Address: %-35s %-35s %s\n", $host->name(),
+				    $object->name(), info($host)));
+	  } elsif ($type eq IPAM::Alternative::MAP_ALIAS) {
+	    indent(3, sprintf("Alias  : %-35s %-35s %s\n", $object->name(),
+				    $host->name(), info($host)));
+	  } elsif ($type eq IPAM::Alternative::MAP_RR) {
+	    indent(3, sprintf("Resource Record: %-35s %-35s %s\n",
+			      $host->name(), $_->getAttribute('type'),
+			      info($host)));
+	  } else {
+	    die "BUG: unknonwn alternative type $type";
+	  }
 	}
       }
     }
@@ -89,4 +94,13 @@ sub show_alt($) {
 sub indent($$) {
   my ($level, $msg) = @_;
   print ' 'x($level*$indent_unit).$msg;
+}
+
+sub info($) {
+  my ($host) = @_;
+  if ($opt{detail}) {
+    my ($file, $line) = $host->nodeinfo();
+    return("$file:$line");
+  }
+  return('');
 }
