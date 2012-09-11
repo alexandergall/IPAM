@@ -3,7 +3,7 @@
 #### Description:   IPAM::Zone class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Zone.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
+#### RCS $Id: Zone.pm,v 1.2 2012/09/04 13:31:25 gall Exp gall $
 
 package IPAM::Zone;
 use IPAM::Thing;
@@ -183,6 +183,8 @@ record by calling the C<add_rr()> instance method of the resulting
 L<IPAM::Domain> object.  If the domain does not exist yet, it is
 created.
 
+If C<$ttl> is undefined, the zone's default ttl is substituted.
+
 =cut
 
 sub add_rr($$$$$$$$) {
@@ -195,6 +197,7 @@ sub add_rr($$$$$$$$) {
     $domain = IPAM::Domain->new(undef, $name, $zone);
     $zone->add_domain($domain);
   }
+  $ttl = $zone->ttl() unless defined $ttl;
   $domain->add_rr($node, $ttl, $type, $rdata, $comment, $dns);
 }
 
