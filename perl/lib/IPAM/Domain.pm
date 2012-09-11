@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.9 2012/09/06 10:27:26 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.10 2012/09/06 15:03:18 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -106,10 +106,14 @@ sub add_rr($$$$$$$) {
 	  ." (conflicts with definition at $file, $line)\n";
       }
       my $rrset_ttl = $self->{types}{$type}{ttl};
-      $rrset_ttl eq $ttl or
-	warn $self->fqdn().": TTL ".($ttl ? $ttl : '<default>')." of new $type RR"
-	  ." differs from TTL ".($rrset_ttl ? $rrset_ttl : '<default>')
-	    ." of existing RRset, ignoring new value.\n";
+      unless ($rrset_ttl eq $ttl) {
+	my ($file, $line) = IPAM::_nodeinfo($node);
+	warn $self->fqdn().": TTL ".
+	  (defined $ttl ? $ttl : '<default>')." of new $type RR"
+	    ." differs from TTL "
+	      .(defined $rrset_ttl ? $rrset_ttl : '<default>')
+		." of existing RRset, ignoring new value at $file, $line.\n";
+      }
     } else {
       ## Create a new RRset
       $self->{types}{$type}{ttl} = $ttl;
