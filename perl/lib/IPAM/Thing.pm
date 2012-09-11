@@ -3,7 +3,7 @@
 #### Description:   IPAM::Thing class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Thing.pm,v 1.5 2012/09/03 15:12:08 gall Exp gall $
+#### RCS $Id: Thing.pm,v 1.6 2012/09/04 06:35:51 gall Exp gall $
 package IPAM::Thing;
 
 =head1 NAME
@@ -17,7 +17,7 @@ IPAM::Thing - Base class for named Things
 =head1 DESCRIPTION
 
 L<IPAM::Thing> is the base class for all objects stored in the IPAM.
-A basic Thing has three properties.
+A basic Thing has the following properties.
 
 =over 4
 
@@ -39,6 +39,13 @@ The description is a free-form text field that may contain a
 human-readable description of the Thing.  When a Thing is created, the
 description is initialized to an empty string.
 
+=item TTL
+
+Some Things are used to generate various DNS resource records.  The
+TTL of these records is derived from the Thing's TTL attribute. The
+TTL is inherited from higher to lower levels of hierarchy within the
+IPAM database.
+
 =back
 
 =head1 CLASS METHODS
@@ -59,7 +66,7 @@ the thing is not associated with any XML node in the IPAM database.
 
 sub new($$$) {
   my ($class, $node, $name) = @_;
-  my $self = { node => $node, name => $name, description => '' };
+  my $self = { node => $node, name => $name, description => '', ttl => undef };
   return(bless($self, $class));
 }
 
@@ -109,7 +116,7 @@ sub nodeinfo($) {
   return(IPAM::_nodeinfo($self->{node}));
 }
 
-=item C<escription()>
+=item C<description()>
 
   my $description = $thing->description();
 
@@ -129,6 +136,26 @@ sub description($$) {
     $self->{description} = $description;
   }
   return($self->{description});
+}
+
+=item C<ttl()>
+
+  my $ttl = $thing->ttl();
+
+Returns the current TTL of the Thing.
+
+=item C<ttl($ttl)>
+
+  $thing->ttl(3600);
+
+Sets the Thing's TTL to C<$ttl> seconds. Returns the previous value.
+
+=cut
+
+sub ttl($$) {
+  my ($self, $ttl) = @_;
+  @_ > 1 and return($self->{ttl} = $ttl);
+  return($self->{ttl});
 }
 
 =back
