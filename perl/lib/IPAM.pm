@@ -171,16 +171,17 @@ my %registries = ( IPAM::REG_ZONE => { key => 'zone_r',
 		   IPAM::REG_NETWORK => { key => 'network_r',
 					  module => 'IPAM::Network::Registry' },
 		   IPAM::REG_ALTERNATIVE => { key => 'alternative_r',
-					      module => 'IPAM::Alternative::Registry' },
+					      module =>
+					      'IPAM::Alternative::Registry' },
 		 );
 
 =head1 CLASS METHODS
 
 =over 4
 
-=item new()
+=item C<new()>
 
-my $ipam = IPAM->new();
+  my $ipam = IPAM->new();
 
 Create an instance of a IPAM object.
 
@@ -204,9 +205,9 @@ sub new() {
 
 =over 4
 
-=item load($file)
+=item C<load($file)>
 
-$ipam->load($file) or die;
+  $ipam->load($file) or die;
 
 Load the IPAM database from the given file.
 
@@ -214,7 +215,6 @@ Load the IPAM database from the given file.
 
 sub load($$) {
   my ($self, $file) = @_;
-  my (%host_cache, %alias_cache, @hosted_on_check, %admin_check);
   my $parser = XML::LibXML->new() or die "Can't create XML parser: $!";
   $parser->set_options(line_numbers => 1, xinclude => 1,
 		       no_xinclude_nodes => 0);
@@ -237,44 +237,41 @@ sub load($$) {
   $file_element->setAttribute('name', $file);
   $root->appendChild($file_element);
 
-  my $xpc = XML::LibXML::XPathContext->new($root) or
-    die "Can't create XPath context: $!";
-  $self->{domain} = $xpc->findvalue('domain');
+  $self->{domain} = $root->findvalue('domain');
   $self->{domain} .= '.' unless $self->{domain} =~ /\.$/;
 
   ## The TTL can be overriden by various lower-level elements that carry
   ## a "ttl" attribute.  Also See the _ttl() helper method.
-  $self->{ttl} = $xpc->findvalue('ttl');
+  ## Note that we need to be careful to distinguish the value 0 from
+  ## undef throughout.
+  $self->{ttl} = $root->findvalue('ttl');
   $self->{ttl} eq '' and $self->{ttl} = undef;
 
   ### Create registries
   map { $self->{$registries{$_}{key}} = $registries{$_}{module}->new() }
     keys(%registries);
 
-  $self->_register_alternatives($xpc->findnodes('alternatives/alternative'));
-  $self->_register_zones($xpc->findvalue('zones/@base'),
-			 $xpc->findnodes('zones/zone'));
-  $self->_register_address_map(($xpc->findnodes('address-map'))[0]);
-  $self->_register_iids($xpc->findnodes('interface-identifiers/iid'));
+  $self->_register_alternatives($root->findnodes('alternatives/alternative'));
+  $self->_register_zones($root->findvalue('zones/@base'),
+			 $root->findnodes('zones/zone'));
+  $self->_register_address_map(shift(@{$root->findnodes('address-map')}));
+  $self->_register_iids($root->findnodes('interface-identifiers/iid'));
 
   ### Loop through the network declarations and process the hosts
   ### therein.
   for my $network_node
-    ($xpc->findnodes('networks/network|networks/group/network')) {
-    my %address_cache;
-    $xpc->setContextNode($network_node);
+    ($root->findnodes('networks/network|networks/group/network')) {
     my $network_fqdn = $self->_fqdn_from_node($network_node);
     $self->_verbose("Processing network $network_fqdn\n");
-    my $loc_node = ($xpc->findnodes('location'))[0];
-    my $location = $xpc->findvalue('location');
-    my $network = IPAM::Network->new($network_node, $network_fqdn, $location);
+    my $loc_node = shift(@{$network_node->findnodes('location')});
+    my $network = IPAM::Network->new($network_node, $network_fqdn, $loc_node);
     eval { $self->{network_r}->add($network) } or
       $self->_die_at_node($network_node, $@);
-    $location and
+    $network->location() and
       (eval { $self->{zone_r}->add_rr($loc_node, $network_fqdn, undef, 'LOC',
-				      $location, undef, 1) } or
+				      $network->location(), undef, 1) } or
        $self->_die_at_node($loc_node, $@));
-    $network->description($xpc->findvalue('description'));
+    $network->description($network_node->findvalue('description'));
 
     ### Find all stub-prefixes associated with the network.  A network
     ### must have at least one prefix and can't have more than one IPv4
@@ -294,294 +291,17 @@ sub load($$) {
 				$network->prefixes(undef, 4))
 			  .")\n");
 
-    ### Process <reserved> element (IPv4 only).  The element can have
-    ### any number of <block> elements that define prefixes, for which
-    ### all covered addresses will be marked as reserved.  There are three
-    ### types of default reserved addresses that can be selected through the
-    ### "default" attribute
-    ###   none    No default reserved addresses (only addresses covered
-    ###           by <block> elements will be reserved).  This is useful
-    ###           for loopback ranges which are technically stub nets but
-    ###           don't have the network/broadcast limitation
-    ###   minimal Only network and broadcast are reserved for stub nets
-    ###           with prefixes shorter than /31
-    ###   full    Like minimal, but in addition, a block of the lowest
-    ###           addresses will be reserved, depending on the size of
-    ###           the network (these addresses are used for router
-    ###           interfaces, HSRP and other infrastructure stuff).
-    ###             /32, /31: none
-    ###             /30, /29: lowest address (router)
-    ###             /28, /27, /26: 3 lowest addresses (router1,
-    ###                                     router2, HSRP)
-    ###             /25 and shorter: 7 lowest addresses
-    if ($v4p) {
-      my $prefix = ($network->prefixes(undef, 4))[0];
-      my $reserved_node = ($xpc->findnodes('reserved'))[0];
-      my $plen = $prefix->ip()->masklen();
-      my $default =  $reserved_node->getAttribute('default');
-      defined $default or $default = 'full';
-      if ($plen < 31 and $default ne 'none') {
-	map {
-	  $self->_reserve($network, $reserved_node, $_->addr())
-	    ->description('Network/Broadcast address')
-	  }
-	  ($prefix->ip()->network(), $prefix->ip()->broadcast());
-	if ($default eq 'full') {
-	  my $max_reserve = 1;
-	  if ($plen >= 26 and $plen <= 28) {
-	    $max_reserve = 3;
-	  } elsif ($plen <= 25) {
-	    $max_reserve = 7;
-	  }
-	  for (my $i = 0; $i < $max_reserve; $i++) {
-	    $self->_reserve($network, $reserved_node,
-			    $prefix->ip()->nth($i)->addr())
-	      ->description('Reserved for network equippment');
-	  }
-	}
-      }
-      foreach my $block_node ($xpc->findnodes('reserved/block')) {
-	my $prefix_r = eval {
-	  IPAM::Prefix->new($block_node,
-			    $block_node->getAttribute('prefix'), 0)
-	  } or $self->_die_at_node($block_node, $@);
-	$prefix_r->af() == 4 or
-	  $self->_die_at_node($block_node,
-			      "Reserved address block must be IPv4\n");
-	foreach my $ip (@{$prefix_r->ip()->splitref(32)}) {
-	  ## Ignore overlap with the broadcast address
-	  next if $ip->addr() eq $prefix->ip()->broadcast()->addr();
-	  $self->_reserve($network, $block_node, $ip->addr());
-	}
+    foreach my $tag (qw/reserved generate host/) {
+      foreach my $node ($network_node->findnodes($tag)) {
+    	my $proc = "_process_".$tag."_node";
+    	$self->$proc($node, $network);
       }
     }
 
-    foreach my $host_node ($xpc->findnodes('host')) {
-      $xpc->setContextNode($host_node);
-      my $host_fqdn = $self->_fqdn_from_node($host_node);
-      $self->_verbose("Processing host $host_fqdn\n");
-      my $host = IPAM::Host->new($host_node, $host_fqdn, $network);
-      eval { $network->add_host($host) } or $self->_die_at_node($host_node, $@);
-      $host->description($xpc->findvalue('description'));
-      ## If the host has no TTL, inherit the TTL from the zone
-      my ($zone) = $self->{zone_r}->lookup_fqdn($host_fqdn);
-      defined $zone or
-	$self->_die_at_node($host_node, $host->name()
-			    .": the hostname cannot be associated with any "
-			    ."configured zone\n");
-      $host->ttl(_ttl($host_node, $zone->ttl()));
-      if (my ($admin_ref, $domain) = ($host_fqdn =~ /^(\w+)-admin\.(.*)$/i)) {
-	$admin_check{$host_fqdn} = join('.', $admin_ref, $domain);
-      }
-
-      ### Default values should be set by the "a:defaultValue"
-      ### annotations in the schema, but I don't know how that
-      ### is supposed to work.  Maybe it's just not supported by
-      ### the RelaxNG validator used by XML::LibXML.
-      if ($host_node->hasAttribute('dns')) {
-	$host->dns($xpc->find('@dns[.=string(true())]'));
-      } else {
-	$host->dns(1);
-      }
-      my $ip_node = ($xpc->findnodes('ip'))[0];
-      my $canonical = 'true';
-      my $reverse = 'true';
-      if ($ip_node->hasAttribute('canonical-name')) {
-	$canonical = _attr_with_default($ip_node, 'canonical-name',
-					undef);
-      }
-      if ($ip_node->hasAttribute('reverse-dns')) {
-	$reverse = _attr_with_default($ip_node, 'reverse-dns',
-				      undef);
-      }
-      ## The hosts' TTL is overriden by the ip's TTL
-      my $addr_ttl = _ttl($ip_node, $host->ttl());
-
-      foreach my $af_node ($xpc->findnodes('*', $ip_node)) {
-	my @addrs;
-	my $af = $af_tag_to_version{$af_node->nodeName()};
-	my $canonical_af = _attr_with_default($af_node, 'canonical-name',
-					      $canonical);
-	my $reverse_af = _attr_with_default($af_node, 'reverse-dns', $reverse);
-	## The ip's TTL is overriden by af-specific TTLs.
-	my $af_ttl = _ttl($af_node, $addr_ttl);
-	if ($af == 6 and (not $af_node->hasAttribute('from-iid') or
-	    not $xpc->find('@from-iid[.=string(false())]', $af_node))) {
-	  my $iid_lookup_fqdn = $host_fqdn;
-	  unless ($xpc->find('@from-iid[.=string(true())]', $af_node) or
-		  not $af_node->hasAttribute('from-iid')) {
-	    ### from-iid specifies a name from which to copy the IID.
-	    ### In that case, the host must not have its own IID.
-	    my $iid = $self->{iid_r}->lookup($host_fqdn);
-	    $iid and
-	      $self->_die_at_node($af_node, "$host_fqdn: Synthesizing of IPv6 "
-				  ."address from IID failed: references "
-				  ."$iid_lookup_fqdn but has its own IID "
-				  ."(".$iid->ip()->addr().")\n");
-	    $iid_lookup_fqdn = $self->_fqdn($af_node->getAttribute('from-iid'));
-	  }
-	  if (my $iid = $self->{iid_r}->lookup($iid_lookup_fqdn)) {
-	    if ($iid->use()) {
-	      ### Construct a IPv6 address from the host's IID for all
-	      ### the network's prefixes.
-	      $self->_verbose("Synthesizing IPv6 address for $host_fqdn "
-			      ."from IID.\n");
-	      foreach my $prefix ($network->prefixes(undef, $af)) {
-		my $ip = $prefix->ip();
-		$ip->masklen() == 64 or
-		  $self->_die_at_node($ip_node, "$host_fqdn: Synthesizing of "
-				      ."IPv6 address from IID failed: requires "
-				      ."a /64, but conflicts with $af "
-				      . $prefix->name());
-		my ($active, $alt, $state) =
-		  $self->_check_alternative($af_node);
-		push(@addrs, { af => $af,
-			       text => ipv6_n2x((add128($ip->aton(),
-							$iid->ip()->aton()))[1]),
-			       node => $af_node,
-			       canonical => $canonical_af,
-			       reverse => $canonical_af eq 'true' ?
-			       $reverse_af : 'false',
-			       alt => [ $alt, $state ],
-			       dns => $active});
-		$iid->in_use(1);
-	      }
-	    }
-	  } elsif ($iid_lookup_fqdn ne $host_fqdn) {
-	    $self->_die_at_node($af_node, "$host_fqdn: Synthesizing of IPv6 "
-				."address from IID failed: references "
-				."$iid_lookup_fqdn, which has no IID.");
-	  }
-	}
-
-	foreach my $a_node ($xpc->findnodes('a', $af_node)) {
-	  my $canonical_a = _attr_with_default($a_node, 'canonical-name',
-					       $canonical_af);
-	  my $reverse_a = _attr_with_default($a_node, 'reverse-dns',
-					     $reverse_af);
-	  $canonical_a eq 'false' and $reverse_a = 'false';
-	  my $dns_a = _attr_with_default($a_node, 'dns', 'true');
-	  my ($active, $alt, $state) = $self->_check_alternative($a_node);
-	  push(@addrs, { af => $af,
-			 text => $a_node->textContent(),
-			 node => $a_node,
-			 canonical => $canonical_a,
-			 reverse => $reverse_a,
-			 alt => [ $alt, $state ],
-			 dns => ($host->dns() && $dns_a eq 'true') && $active});
-	}
-
-	foreach my $addr (@addrs) {
-	  my $address = eval {
-	    IPAM::Address->new($addr->{node}, $addr->{text})
-	    } or $self->_die_at_node($addr->{node}, $@);
-	  unless ($address->af() == $addr->{af}) {
-	    $self->_die_at_node($addr->{node}, $address->name." is not a valid "
-				.$af_info{$addr->{af}}{name}." address.\n");
-	  }
-	  if (exists $address_cache{$address->name()}) {
-	    $address = $address_cache{$address->name()};
-	  } else {
-	    eval { $network->add_address($address) } or
-	      $self->_die_at_node($addr->{node}, $@);
-	    $address_cache{$address->name()} = $address;
-	  }
-	  eval { $host->add_address($address) } or
-	    $self->_die_at_node($addr->{node}, $@);
-	  my ($alt, $state) = @{$addr->{alt}};
-	  my $rr_ttl = $af_ttl;
-	  if ($alt) {
-	    $alt->add_mapping($state, IPAM::Alternative::MAP_ADDRESS,
-			      $host, $address);
-	    defined $alt->ttl() and $rr_ttl = $alt->ttl();
-	  }
-	  $addr->{canonical} eq 'true' and
-	    (eval { $address->canonical_host($host) } or
-	     $self->_die_at_node($addr->{node}, $@));
-	  eval { $address->add_host($host) } or
-	    $self->_die_at_node($addr->{node}, $@);
-	  my $rrtype = $af_info{$addr->{af}}{rrtype};
-	  eval { $self->{zone_r}->add_rr($addr->{node}, $host_fqdn, $rr_ttl,
-					 $rrtype, $address->name(),
-					 $addr->{reverse} eq 'true' ?
-					 undef : "secondary $rrtype RR",
-					 $addr->{dns}) } or
-					   $self->_die_at_node($af_node, $@);
-	}
-      } # foreach $af_node
-
-      $host->address_registry->counter() or
-	$self->_warn_at_node($host->node(),
-			     "There are no addresses associated with "
-			     ."the host ".$host->name());
-
-      if (my $loc = $network->location() and not
-	  $xpc->find('@noloc[.=string(true())]')) {
-	eval { $self->{zone_r}->add_rr($loc_node, $host_fqdn, undef, 'LOC',
-				       $loc, undef, $host->dns()) } or
-					 $self->_die_at_node($host_node, $@);
-      }
-
-      foreach my $alias_node ($xpc->findnodes('alias')) {
-	my $alias_fqdn = $self->_fqdn_from_node($alias_node);
-	$self->_verbose("Registering host $alias_fqdn as alias for "
-			."$host_fqdn\n");
-	my $alias = IPAM::Thing->new($alias_node, $alias_fqdn);
-	## The host's TTL is overriden by the alias' TTL
-	$alias->ttl(_ttl($alias_node, $host->ttl()));
-	eval { $host->add_alias($alias) } or
-	  $self->_die_at_node($alias_node, $@);
-	my ($active, $alt, $state) = $self->_check_alternative($alias_node);
-	if ($alt) {
-	  $alt->add_mapping($state, IPAM::Alternative::MAP_ALIAS,
-			    $host, $alias);
-	  defined $alt->ttl() and $alias->ttl($alt->ttl());
-	}
-	eval { $self->{zone_r}->add_rr($alias_node, $alias_fqdn, $alias->ttl(),
-				       'CNAME', $host_fqdn,
-				       undef, $host->dns() && $active) } or
-					 $self->_die_at_node($alias_node, $@);
-	$alias_cache{lc($alias_fqdn)} = $host;
-      }
-
-      foreach my $hosted_on_node ($xpc->findnodes('hosted-on')) {
-	my $hosted_on_fqdn = $self->_fqdn_from_node($hosted_on_node);
-	$self->_verbose("Registering host $hosted_on_fqdn as hosted-on for "
-			."$host_fqdn\n");
-	my $hosted_on = IPAM::Thing->new($hosted_on_node, $hosted_on_fqdn);
-	## The host's TTL is overriden by the hosted_on's TTL
-	$hosted_on->ttl(_ttl($hosted_on_node, $host->ttl()));
-	eval { $host->add_hosted_on($hosted_on) }
-	  or $self->_die_at_node($hosted_on_node, $@);
-	if (not $hosted_on_node->hasAttribute('check') or
-	    $xpc->find('@check[.=string(true())]', $hosted_on_node)) {
-	  push(@hosted_on_check, { host => $host, target => $hosted_on });
-	}
-	eval { $self->{zone_r}->add_rr($hosted_on_node, $host_fqdn,
-				       $hosted_on->ttl(),
-				       'PTR', $hosted_on_fqdn,
-				       undef, $host->dns()) } or
-					 $self->_die_at_node($hosted_on_node,
-							     $@);
-      }
-
-      foreach my $rr_node ($xpc->findnodes('rr')) {
-	my $type = $rr_node->getAttribute('type');
-	(my $rdata = $rr_node->textContent()) =~ s/^\s*(.*?)\s*$/$1/;
-	my ($active, $alt, $state) = $self->_check_alternative($rr_node);
-	my $rr_ttl = _ttl($rr_node, $host->ttl());
-	if ($alt) {
-	  $alt->add_mapping($state, IPAM::Alternative::MAP_RR,
-			    $host, $rr_node);
-	  defined $alt->ttl() and $rr_ttl = $alt->ttl();
-	}
-	## The hosts's TTL is overriden by the RR's TTL
-	$self->{zone_r}->add_rr($rr_node, $host_fqdn, $rr_ttl,
-				$type, $rdata, undef, $host->dns && $active);
-      }
-      $host_cache{lc($host_fqdn)} = $host;
-    }
   }
+
+  ### Perform checks that require that the entire database
+  ### has been read and parsed.
 
   ### Check if there are unreferenced IIDs.
   foreach my $iid ($self->{iid_r}->things()) {
@@ -592,18 +312,19 @@ sub load($$) {
   }
 
   ### Check if <hosted-on> targets exist
-  foreach my $ref (@hosted_on_check) {
-    exists $host_cache{lc($ref->{target}->name())} or
+  foreach my $ref (@{$self->{hosted_on_check}}) {
+    exists $self->{host_cache}{lc($ref->{target}->name())} or
       $self->_die_at_node($ref->{target}->node(),
 			  $ref->{host}->name().": hosted-on host "
 			  .$ref->{target}->name()." does not exist");
     }
 
   ### Check if "-admin" hosts exist without the host itself
-  foreach my $admin (keys(%admin_check)) {
-    my $ref = $admin_check{$admin};
-    (exists $host_cache{lc($ref)} or exists $alias_cache{lc($ref)}) or
-      $self->_warn_at_node($host_cache{lc($admin)}->node(),
+  foreach my $admin (keys(%{$self->{admin_check}})) {
+    my $ref = $self->{admin_check}{$admin};
+    (exists $self->{host_cache}{lc($ref)} or
+     exists $self->{alias_cache}{lc($ref)}) or
+      $self->_warn_at_node($self->{host_cache}{lc($admin)}->node(),
 			   "Console $admin: managed host $ref does not exist");
   }
 }
@@ -699,17 +420,6 @@ sub _verbose($$) {
   $self->{verbose} && print STDERR $msg;
 }
 
-sub _reserve($$$) {
-  my ($self, $network, $reserved_node, $addr) = @_;
-  $self->_verbose("Marking $addr as reserved\n");
-  my $address = eval { IPAM::Address->new($reserved_node, $addr, 1) }
-    or $self->_die_at_node($reserved_node, $@);
-  eval { $network->add_address($address) }
-    or $self->_die_at_node($reserved_node, $@);
-  $address->description($reserved_node->findvalue('description'));
-  return($address);
-}
-
 ### Determine file name and line number of the definition of a given
 ### node and add them to an error message to warn or die.
 sub _at_node($$$$) {
@@ -717,7 +427,7 @@ sub _at_node($$$$) {
   my ($file, $line) = _nodeinfo($node);
   chomp $msg;
   defined $file and $msg = "$msg at $file, line $line";
-  if ($warn) { 
+  if ($warn) {
     $self->{warnings} and warn "Warning: $msg\n";
   } else {
     die "Error: $msg\n";
@@ -787,6 +497,16 @@ sub _register_zones($$@) {
   }
 }
 
+### Register address map
+sub _register_address_map($$) {
+  my ($self, $map_node) = @_;
+  $self->_verbose("Registering address map\n");
+  my $map = IPAM::AddressMap->new($map_node, 'Address Map');
+  $self->{address_map} = $map;
+  $self->_register_address_blocks($map->registry(),
+				  $map_node->findnodes('block|net'));
+}
+
 ### Recursively register all address blocks contained in a given
 ### block (i.e. prefix).  This also generates the DNS entries for
 ### all "stub-prefixes" (i.e. IP subnets).  Currently, blocks that
@@ -832,16 +552,6 @@ sub _register_address_blocks($$@) {
   }
 }
 
-### Register address map
-sub _register_address_map($$) {
-  my ($self, $map_node) = @_;
-  $self->_verbose("Registering address map\n");
-  my $map = IPAM::AddressMap->new($map_node, 'Address Map');
-  $self->{address_map} = $map;
-  $self->_register_address_blocks($map->registry(),
-				  $map_node->findnodes('block|net'));
-}
-
 ### Traverse a list of element nodes of type "iid" and populate the
 ### IID registry with IPAM::IID objects named by the fqdn of the host.
 sub _register_iids($$@) {
@@ -863,6 +573,357 @@ sub _register_iids($$@) {
   }
 }
 
+### Process <reserved> element (IPv4 only).  The element can have
+### any number of <block> elements that define prefixes, for which
+### all covered addresses will be marked as reserved.  There are three
+### types of default reserved addresses that can be selected through the
+### "default" attribute
+###   none    No default reserved addresses (only addresses covered
+###           by <block> elements will be reserved).  This is useful
+###           for loopback ranges which are technically stub nets but
+###           don't have the network/broadcast limitation
+###   minimal Only network and broadcast are reserved for stub nets
+###           with prefixes shorter than /31
+###   full    Like minimal, but in addition, a block of the lowest
+###           addresses will be reserved, depending on the size of
+###           the network (these addresses are used for router
+###           interfaces, HSRP and other infrastructure stuff).
+###             /32, /31: none
+###             /30, /29: lowest address (router)
+###             /28, /27, /26: 3 lowest addresses (router1,
+###                                     router2, HSRP)
+###             /25 and shorter: 7 lowest addresses
+sub _process_reserved_node($$) {
+  my ($self, $node, $network) = @_;
+  ## Return immediately if this is a IPv6-only network.
+  my $prefix = ($network->prefixes(undef, 4))[0] or return;
+  my $plen = $prefix->ip()->masklen();
+  my $default =  $node->getAttribute('default');
+  defined $default or $default = 'full';
+  if ($plen < 31 and $default ne 'none') {
+    map {
+      $self->_reserve($network, $node, $_->addr())
+	->description('Network/Broadcast address')
+      }
+      ($prefix->ip()->network(), $prefix->ip()->broadcast());
+    if ($default eq 'full') {
+      my $max_reserve = 1;
+      if ($plen >= 26 and $plen <= 28) {
+	$max_reserve = 3;
+      } elsif ($plen <= 25) {
+	$max_reserve = 7;
+      }
+      for (my $i = 0; $i < $max_reserve; $i++) {
+	$self->_reserve($network, $node, $prefix->ip()->nth($i)->addr())
+	  ->description('Reserved for network equippment');
+      }
+    }
+  }
+  foreach my $block_node ($network->node()->findnodes('reserved/block')) {
+    $self->_process_block_node($block_node, $prefix,
+			       sub { $self->_reserve($network, $_[0], $_[1]) });
+  }
+}
+
+### Helper method for _process_reserved()
+sub _reserve($$$) {
+  my ($self, $network, $reserved_node, $addr) = @_;
+  $self->_verbose("Marking $addr as reserved\n");
+  my $address = eval { IPAM::Address->new($reserved_node, $addr, 1) }
+    or $self->_die_at_node($reserved_node, $@);
+  eval { $network->add_address($address) }
+    or $self->_die_at_node($reserved_node, $@);
+  $address->description($reserved_node->findvalue('description'));
+  return($address);
+}
+
+sub _process_generate_node($$$) {
+  my ($self, $node, $network) = @_;
+  my $prefix = ($network->prefixes(undef, 4))[0];
+  my $pattern = $node->getAttribute('pattern');
+  my $desc = $node->findvalue('description');
+  my $ttl = $node->getAttribute('ttl');
+  my $i = 1;
+  foreach my $block_node ($node->findnodes('block')) {
+    $self->_process_block_node
+      ($block_node, $prefix,
+       sub { my ($block_node, $addr) = @_;
+	     (my $name = $pattern) =~ s/%n/$i/;
+	     $i++;
+	     my $block_desc = $block_node->findvalue('description');
+	     $self->_process_host_node
+	       ($self->_synthesize_host_node
+		($name, $ttl, $block_desc ? $block_desc : $desc, $addr),
+		$network, $node, $block_node);
+	   });
+  }
+}
+
+sub _synthesize_host_node($$$) {
+  my ($self, $name, $ttl, $desc, $v4addr) = @_;
+  my $host = XML::LibXML::Element->new('host');
+  $host->setAttribute('name', $name);
+  $ttl and $host->setAttribute('ttl', $ttl);
+  my $chunk = ($desc ? "<description>$desc</description>" : '')
+    ."<ip><v4><a>$v4addr</a></v4></ip>";
+  $host->appendWellBalancedChunk($chunk);
+  return($host);
+}
+
+### Helper method for _process_{reserved,generate}_node()
+sub _process_block_node($$$$) {
+  my ($self, $block_node, $prefix, $callback) = @_;
+  my $prefix_r = eval {
+    IPAM::Prefix->new($block_node,
+		      $block_node->getAttribute('prefix'), 0)
+    } or $self->_die_at_node($block_node, $@);
+  $prefix_r->af() == 4 or
+    $self->_die_at_node($block_node, "Address block must be IPv4\n");
+  $prefix_r->ip()->splitref(32);
+  foreach my $ip (@{$prefix_r->ip()->splitref(32)}) {
+    ## Ignore overlap with the broadcast address
+    next if $ip->addr() eq $prefix->ip()->broadcast()->addr();
+    $callback->($block_node, $ip->addr());
+  }
+}
+
+sub _process_host_node($$$$) {
+  my ($self, $node, $network, $gen_node, $gen_block_node) = @_;
+  my $host_fqdn = $self->_fqdn_from_node($node);
+  $self->_verbose("Processing host $host_fqdn\n");
+  ## If this host is derived from a synthesized <host> element, record
+  ## the node of the corresponding <generate> element as origin node.
+  my $host = IPAM::Host->new($gen_node ? $gen_node : $node,
+			     $host_fqdn, $network);
+  eval { $network->add_host($host) } or $self->_die_at_node($node, $@);
+  $host->description($node->findvalue('description'));
+  ## If the host has no TTL, inherit the TTL from the zone
+  my ($zone) = $self->{zone_r}->lookup_fqdn($host_fqdn);
+  defined $zone or
+    $self->_die_at_node($node, $host->name()
+			.": the hostname cannot be associated with any "
+			."configured zone\n");
+  $host->ttl(_ttl($node, $zone->ttl()));
+  if (my ($admin_ref, $domain) = ($host_fqdn =~ /^(\w+)-admin\.(.*)$/i)) {
+    $self->{admin_check}{$host_fqdn} = join('.', $admin_ref, $domain);
+  }
+
+  ### Default values should be set by the "a:defaultValue"
+  ### annotations in the schema, but I don't know how that
+  ### is supposed to work.  Maybe it's just not supported by
+  ### the RelaxNG validator used by XML::LibXML.
+  if ($node->hasAttribute('dns')) {
+    $host->dns($node->find('@dns[.=string(true())]'));
+  } else {
+    $host->dns(1);
+  }
+  my $ip_node = shift(@{$node->findnodes('ip')});
+  my $canonical = 'true';
+  my $reverse = 'true';
+  if ($ip_node->hasAttribute('canonical-name')) {
+    $canonical = _attr_with_default($ip_node, 'canonical-name',
+				    undef);
+  }
+  if ($ip_node->hasAttribute('reverse-dns')) {
+    $reverse = _attr_with_default($ip_node, 'reverse-dns',
+				  undef);
+  }
+  ## The hosts' TTL is overriden by the ip's TTL
+  my $addr_ttl = _ttl($ip_node, $host->ttl());
+
+  foreach my $af_node ($ip_node->findnodes('*')) {
+    my @addrs;
+    my $af = $af_tag_to_version{$af_node->nodeName()};
+    my $canonical_af = _attr_with_default($af_node, 'canonical-name',
+					  $canonical);
+    my $reverse_af = _attr_with_default($af_node, 'reverse-dns', $reverse);
+    ## The ip's TTL is overriden by af-specific TTLs.
+    my $af_ttl = _ttl($af_node, $addr_ttl);
+    if ($af == 6 and (not $af_node->hasAttribute('from-iid') or
+		      not $af_node->find('@from-iid[.=string(false())]'))) {
+      my $iid_lookup_fqdn = $host_fqdn;
+      unless ($af_node->find('@from-iid[.=string(true())]') or
+	      not $af_node->hasAttribute('from-iid')) {
+	### from-iid specifies a name from which to copy the IID.
+	### In that case, the host must not have its own IID.
+	my $iid = $self->{iid_r}->lookup($host_fqdn);
+	$iid and
+	  $self->_die_at_node($af_node, "$host_fqdn: Synthesizing of IPv6 "
+			      ."address from IID failed: references "
+			      ."$iid_lookup_fqdn but has its own IID "
+			      ."(".$iid->ip()->addr().")\n");
+	$iid_lookup_fqdn = $self->_fqdn($af_node->getAttribute('from-iid'));
+      }
+      if (my $iid = $self->{iid_r}->lookup($iid_lookup_fqdn)) {
+	if ($iid->use()) {
+	  ### Construct a IPv6 address from the host's IID for all
+	  ### the network's prefixes.
+	  $self->_verbose("Synthesizing IPv6 address for $host_fqdn "
+			  ."from IID.\n");
+	  foreach my $prefix ($network->prefixes(undef, $af)) {
+	    my $ip = $prefix->ip();
+	    $ip->masklen() == 64 or
+	      $self->_die_at_node($ip_node, "$host_fqdn: Synthesizing of "
+				  ."IPv6 address from IID failed: requires "
+				  ."a /64, but conflicts with $af "
+				  . $prefix->name());
+	    my ($active, $alt, $state) =
+	      $self->_check_alternative($af_node);
+	    push(@addrs, { af => $af,
+			   text => ipv6_n2x((add128($ip->aton(),
+						    $iid->ip()->aton()))[1]),
+			   node => $af_node,
+			   canonical => $canonical_af,
+			   reverse => $canonical_af eq 'true' ?
+			   $reverse_af : 'false',
+			   alt => [ $alt, $state ],
+			   dns => $active});
+	    $iid->in_use(1);
+	  }
+	}
+      } elsif ($iid_lookup_fqdn ne $host_fqdn) {
+	$self->_die_at_node($af_node, "$host_fqdn: Synthesizing of IPv6 "
+			    ."address from IID failed: references "
+			    ."$iid_lookup_fqdn, which has no IID.");
+      }
+    }
+
+    foreach my $a_node ($af_node->findnodes('a')) {
+      my $canonical_a = _attr_with_default($a_node, 'canonical-name',
+					   $canonical_af);
+      my $reverse_a = _attr_with_default($a_node, 'reverse-dns',
+					 $reverse_af);
+      $canonical_a eq 'false' and $reverse_a = 'false';
+      my $dns_a = _attr_with_default($a_node, 'dns', 'true');
+      my ($active, $alt, $state) = $self->_check_alternative($a_node);
+      push(@addrs, { af => $af,
+		     text => $a_node->textContent(),
+		     node => $a_node,
+		     canonical => $canonical_a,
+		     reverse => $reverse_a,
+		     alt => [ $alt, $state ],
+		     dns => ($host->dns() && $dns_a eq 'true') && $active});
+    }
+
+    foreach my $addr (@addrs) {
+      ## If this host node has been synthesized from a <generate>,
+      ## the node object of the address is some temporary thing which
+      ## is not visible by the user.  In this case, we subsitute the
+      ## node of the <block> element within the <generate> from which
+      ## the address has been synthesized.
+      $gen_block_node and $addr->{node} = $gen_block_node;
+      my $address = eval {
+	IPAM::Address->new($addr->{node}, $addr->{text})
+	} or $self->_die_at_node($addr->{node}, $@);
+      unless ($address->af() == $addr->{af}) {
+	$self->_die_at_node($addr->{node}, $address->name." is not a valid "
+			    .$af_info{$addr->{af}}{name}." address.\n");
+      }
+      if (exists $self->{address_cache}{$address->name()}) {
+	$address = $self->{address_cache}{$address->name()};
+      } else {
+	eval { $network->add_address($address) } or
+	  $self->_die_at_node($addr->{node}, $@);
+	$self->{address_cache}{$address->name()} = $address;
+      }
+      eval { $host->add_address($address) } or
+	$self->_die_at_node($addr->{node}, $@);
+      my ($alt, $state) = @{$addr->{alt}};
+      my $rr_ttl = $af_ttl;
+      if ($alt) {
+	$alt->add_mapping($state, IPAM::Alternative::MAP_ADDRESS,
+			  $host, $address);
+	defined $alt->ttl() and $rr_ttl = $alt->ttl();
+      }
+      $addr->{canonical} eq 'true' and
+	(eval { $address->canonical_host($host) } or
+	 $self->_die_at_node($addr->{node}, $@));
+      eval { $address->add_host($host) } or
+	$self->_die_at_node($addr->{node}, $@);
+      my $rrtype = $af_info{$addr->{af}}{rrtype};
+      eval { $self->{zone_r}->add_rr($addr->{node}, $host_fqdn, $rr_ttl,
+				     $rrtype, $address->name(),
+				     $addr->{reverse} eq 'true' ?
+				     undef : "secondary $rrtype RR",
+				     $addr->{dns}) } or
+				       $self->_die_at_node($af_node, $@);
+    }
+  }				# foreach $af_node
+
+  $host->address_registry->counter() or
+    $self->_warn_at_node($host->node(),
+			 "There are no addresses associated with "
+			 ."the host ".$host->name());
+
+  if (my $loc = $network->location() and not
+      $node->find('@noloc[.=string(true())]')) {
+    eval { $self->{zone_r}->add_rr($network->location_node(), $host_fqdn,
+				   undef, 'LOC',
+				   $loc, undef, $host->dns()) } or
+				     $self->_die_at_node($node, $@);
+  }
+
+  foreach my $alias_node ($node->findnodes('alias')) {
+    my $alias_fqdn = $self->_fqdn_from_node($alias_node);
+    $self->_verbose("Registering host $alias_fqdn as alias for "
+		    ."$host_fqdn\n");
+    my $alias = IPAM::Thing->new($alias_node, $alias_fqdn);
+    ## The host's TTL is overriden by the alias' TTL
+    $alias->ttl(_ttl($alias_node, $host->ttl()));
+    eval { $host->add_alias($alias) } or
+      $self->_die_at_node($alias_node, $@);
+    my ($active, $alt, $state) = $self->_check_alternative($alias_node);
+    if ($alt) {
+      $alt->add_mapping($state, IPAM::Alternative::MAP_ALIAS,
+			$host, $alias);
+      defined $alt->ttl() and $alias->ttl($alt->ttl());
+    }
+    eval { $self->{zone_r}->add_rr($alias_node, $alias_fqdn, $alias->ttl(),
+				   'CNAME', $host_fqdn,
+				   undef, $host->dns() && $active) } or
+				     $self->_die_at_node($alias_node, $@);
+    $self->{alias_cache}{lc($alias_fqdn)} = $host;
+  }
+
+  foreach my $hosted_on_node ($node->findnodes('hosted-on')) {
+    my $hosted_on_fqdn = $self->_fqdn_from_node($hosted_on_node);
+    $self->_verbose("Registering host $hosted_on_fqdn as hosted-on for "
+		    ."$host_fqdn\n");
+    my $hosted_on = IPAM::Thing->new($hosted_on_node, $hosted_on_fqdn);
+    ## The host's TTL is overriden by the hosted_on's TTL
+    $hosted_on->ttl(_ttl($hosted_on_node, $host->ttl()));
+    eval { $host->add_hosted_on($hosted_on) }
+      or $self->_die_at_node($hosted_on_node, $@);
+    if (not $hosted_on_node->hasAttribute('check') or
+	$hosted_on_node->find('@check[.=string(true())]')) {
+      push(@{$self->{hosted_on_check}},
+	   { host => $host, target => $hosted_on });
+    }
+    eval { $self->{zone_r}->add_rr($hosted_on_node, $host_fqdn,
+				   $hosted_on->ttl(),
+				   'PTR', $hosted_on_fqdn,
+				   undef, $host->dns()) } or
+				     $self->_die_at_node($hosted_on_node,
+							 $@);
+  }
+
+  foreach my $rr_node ($node->findnodes('rr')) {
+    my $type = $rr_node->getAttribute('type');
+    (my $rdata = $rr_node->textContent()) =~ s/^\s*(.*?)\s*$/$1/;
+    my ($active, $alt, $state) = $self->_check_alternative($rr_node);
+    my $rr_ttl = _ttl($rr_node, $host->ttl());
+    if ($alt) {
+      $alt->add_mapping($state, IPAM::Alternative::MAP_RR,
+			$host, $rr_node);
+      defined $alt->ttl() and $rr_ttl = $alt->ttl();
+    }
+    ## The hosts's TTL is overriden by the RR's TTL
+    $self->{zone_r}->add_rr($rr_node, $host_fqdn, $rr_ttl,
+			    $type, $rdata, undef, $host->dns && $active);
+  }
+  $self->{host_cache}{lc($host->name())} = $host;
+}
+
 ####
 #### Public instance methods
 ####
@@ -881,15 +942,17 @@ sub address_map($) {
   return($self->{address_map});
 }
 
-=item registry($reg)
+=item C<registry($reg)>
 
-my $r = $ipam->registry($reg);
+  my $r = $ipam->registry($reg);
 
-Returns the registry object associated with the identifier $reg, which can be one of
+Returns the registry object associated with the identifier $reg, which
+can be one of
 
 IPAM::REG_IID
 IPAM::REG_ZONE
 IPAM::REG_NETWORK
+IPAM::REG_ALTERNATIVE
 
 =cut
 
@@ -901,9 +964,9 @@ sub registry($$) {
   return($self->{$registries{$registry}{key}});
 }
 
-=item nameinfo($fqdn)
+=item C<nameinfo($fqdn)>
 
-my $info = $ipam->nameinfo($fqdn);
+  my $info = $ipam->nameinfo($fqdn);
 
 Returns a reference to a hash with the following keys
 
