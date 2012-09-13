@@ -3,7 +3,7 @@
 #### Description:   IPAM::Network class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Network.pm,v 1.6 2012/09/04 13:19:10 gall Exp gall $
+#### RCS $Id: Network.pm,v 1.7 2012/09/10 14:42:02 gall Exp gall $
 
 package IPAM::Network;
 use IPAM::Thing;
@@ -49,9 +49,9 @@ checked to be in valid DNS master file syntax.
 =cut
 
 sub new($$$) {
-  my ($class, $node, $name, $location) = @_;
+  my ($class, $node, $name, $location_node) = @_;
   my $self = $class->SUPER::new($node, $name);
-  $self->{location} = $location;
+  $self->{location_node} = $location_node;
   $self->{prefix_r} = IPAM::Prefix::Registry->new();
   $self->{host_r} = IPAM::Host::Registry->new();
   return($self);
@@ -65,13 +65,30 @@ sub new($$$) {
 
   my $loc = $net->location();
 
-Returns the location string that was passed to the C<new()> method.
+Returns the location string contained in the L<XML::LibXML::node>
+object that was passed to the C<new()> method.
 
 =cut
 
 sub location($) {
   my ($self) = @_;
-  return($self->{location});
+  defined $self->{location_node} and
+    return($self->{location_node}->textContent());
+  return(undef);
+}
+
+=item C<location_node()>
+
+  my $loc_node = $net->location_node();
+
+Returns the L<XML::LibXML::Node> object which was passed to the
+C<new()> method.
+
+=cut
+
+sub location_node($) {
+  my ($self) = @_;
+  return($self->{location_node});
 }
 
 =item C<add_prefix($prefix)>
