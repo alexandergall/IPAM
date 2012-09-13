@@ -3,7 +3,7 @@
 # ## Description:   RelaxNG schema for the IPAM <networks> element
 # ## Author:        Alexander Gall <gall@switch.ch>
 # ## Created:       Sep 4 2012
-# ## RCS $Id: network.rnc,v 1.11 2012/09/10 15:29:59 gall Exp gall $
+# ## RCS $Id: network.rnc,v 1.12 2012/09/13 07:19:56 gall Exp gall $
 # ##
 datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
 namespace a = "http://relaxng.org/ns/compatibility/annotations/1.0"
@@ -31,7 +31,7 @@ canonical-name = attribute canonical-name { xsd:boolean }
 reverse-dns = attribute reverse-dns { xsd:boolean }
 description = element description { text }
 alternative = attribute alternative { text }
-block = element block {
+block_net = element block {
    attribute prefix { text },
    (description | empty)
 }
@@ -40,14 +40,14 @@ reserved = element reserved {
    [ a:defaultValue = "full" ] attribute default { 
       "none" | "minimal" | "full" 
    }?,
-   block*
+   block_net*
 }
 
 generate = element generate {
    attribute pattern { text },
    ttl?,
    description?,
-   block+
+   block_net+
 }
 
 host = element host {
