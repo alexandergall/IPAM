@@ -3,7 +3,7 @@
 # ## Description:   RelaxNG schema for the IPAM <alternatives> element
 # ## Author:        Alexander Gall <gall@switch.ch>
 # ## Created:       Sep 4 2012
-# ## RCS $Id: alternatives.rnc,v 1.2 2012/09/10 15:15:26 gall Exp gall $
+# ## RCS $Id: alternatives.rnc,v 1.3 2012/09/10 15:28:10 gall Exp gall $
 # ##
 datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
 
@@ -14,6 +14,7 @@ alternatives = element alternatives {
    element alternative {
       attribute label { text },
       attribute state { text },
+      attribute ttl { xsd:integer }?,
       element allowed-state { text }+
    }*
 }
