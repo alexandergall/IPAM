@@ -56,6 +56,8 @@ sub show_alt($) {
   my $state = $alt->state();
   indent(1, "Allowed states: ".join(', ', @states)."\n");
   indent(1, "Active state  : $state\n");
+  indent(1, "TTL override  : ".(defined $alt->ttl() ? $alt->ttl() : '<none>')
+	 ."\n");
   foreach my $state (@states) {
     my %hosts;
     indent(1,"Mappings for state \"$state\":\n");
@@ -72,19 +74,20 @@ sub show_alt($) {
 	}
 	foreach my $mapping (sort $sub @{$ref->{$type}}) {
 	  my ($host, $object) = @$mapping;
+	  my @args;
 	  if ($type eq IPAM::Alternative::MAP_ADDRESS) {
-	    indent(3, sprintf("Address: %-35s %-35s %s\n", $host->name(),
-				    $object->name(), info($host)));
+	      push(@args, 'Address', $host->name(), $object->name(),
+		   info($host));
 	  } elsif ($type eq IPAM::Alternative::MAP_ALIAS) {
-	    indent(3, sprintf("Alias  : %-35s %-35s %s\n", $object->name(),
-				    $host->name(), info($host)));
+	      push(@args, 'Alias  ', $object->name(), $host->name(),
+		   info($host));
 	  } elsif ($type eq IPAM::Alternative::MAP_RR) {
-	    indent(3, sprintf("Resource Record: %-35s %-35s %s\n",
-			      $host->name(), $_->getAttribute('type'),
-			      info($host)));
+	      push(@args, 'Resource Record', $host->name(),
+		   $object->getAttribute('type'), info($host));
 	  } else {
 	    die "BUG: unknonwn alternative type $type";
 	  }
+	  indent(3, sprintf("%s: %-35s %-35s %s\n", @args));
 	}
       }
     }
