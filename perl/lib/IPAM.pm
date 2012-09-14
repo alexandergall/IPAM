@@ -281,9 +281,7 @@ sub load($$) {
 	or $self->_die_at_node($network_node, "Network ".$network->name()
 			       ." is not associated with any prefixes\n");
     map { $network->add_prefix($_); $_->network($network) } @network_prefixes;
-    my ($v4p, $v6p) = (scalar($network->prefixes(undef, 4)),
-		       scalar($network->prefixes(undef, 6)));
-    ($v4p <= 1) or
+    ($network->prefixes(undef, 4) <= 1) or
       $self->_die_at_node($network_node, "Network ".$network->name()
 			  ." can't be associated with more than one IPv4"
 			  ." prefix (found: "
@@ -679,7 +677,6 @@ sub _process_block_node($$$$) {
     } or $self->_die_at_node($block_node, $@);
   $prefix_r->af() == 4 or
     $self->_die_at_node($block_node, "Address block must be IPv4\n");
-  $prefix_r->ip()->splitref(32);
   foreach my $ip (@{$prefix_r->ip()->splitref(32)}) {
     ## Ignore overlap with the broadcast address
     next if $ip->addr() eq $prefix->ip()->broadcast()->addr();
@@ -848,7 +845,7 @@ sub _process_host_node($$$$) {
 				     $addr->{dns}) } or
 				       $self->_die_at_node($af_node, $@);
     }
-  }				# foreach $af_node
+  } # foreach $af_node
 
   $host->address_registry->counter() or
     $self->_warn_at_node($host->node(),
