@@ -295,7 +295,6 @@ sub load($$) {
     	$self->$proc($node, $network);
       }
     }
-
   }
 
   ### Perform checks that require that the entire database
@@ -448,10 +447,9 @@ sub _register_alternatives($@) {
   foreach my $node (@nodes) {
     my $label = $node->getAttribute('label');
     my $state = $node->getAttribute('state');
-    my @allowed_states;
-    map { push(@allowed_states, $_->textContent()) }
-	    $node->findnodes('allowed-state');
-    my $alt = IPAM::Alternative->new($node, $label, @allowed_states);
+    my $alt = IPAM::Alternative->new($node, $label,
+				     map { $_->textContent() }
+				     $node->findnodes('allowed-state'));
     $alt->ttl($node->getAttribute('ttl'));
     eval { $alt->state($state) } or
       ($@ and $self->_die_at_node($node, $@));
@@ -657,6 +655,9 @@ sub _process_generate_node($$$) {
   }
 }
 
+### Synthesize a <host> element given a FQDN, TTL, description and
+### IPv4 address.  Returns a XML::LibXML::Element that can be passed
+### directly to _process_host_node() for integration into the IPAM.
 sub _synthesize_host_node($$$) {
   my ($self, $name, $ttl, $desc, $v4addr) = @_;
   my $host = XML::LibXML::Element->new('host');
