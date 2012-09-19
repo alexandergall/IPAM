@@ -1,0 +1,40 @@
+#!/usr/bin/perl
+
+my $base_dir;
+BEGIN {
+  $base_dir = '/home/noc/IPAM';
+  if (exists $ENV{IPAM_BASE}) {
+    $base_dir = $ENV{IPAM_BASE};
+  }
+}
+use strict;
+use warnings;
+use lib "$base_dir/lib/perl5";
+## The recursive filler() routine can trigger "deep recursion"
+## warnings if a block is large and sparsely populated.
+## One can force aggregation with the "--agregate" option
+## to avoid problems with this (in particular with large
+## IPv6 blocks).
+no warnings "recursion";
+use IPAM 0.01;
+use Getopt::Long;
+
+my %opt;
+sub usage() {
+  print <<"EOF";
+usage: $0 [--warnings]
+EOF
+exit(1);
+}
+
+GetOptions(\%opt, "warnings") or usage();
+@ARGV == 0 or usage();
+my $file = "$base_dir/ipam.xml";
+system("cd $base_dir && make --silent validate") == 0 or die;
+my $ipam = IPAM->new({ verbose => undef, base_dir => $base_dir,
+		       validate => undef, warnings => $opt{warnings} });
+$ipam->load($file);
+
+## Local Variables:
+## mode: CPerl
+## End:
