@@ -775,7 +775,7 @@ sub _process_host_node($$$$) {
 			   reverse => $canonical_af eq 'true' ?
 			   $reverse_af : 'false',
 			   alt => [ $alt, $state ],
-			   dns => $active});
+			   dns => $host->dns() && $active});
 	    $iid->in_use(1);
 	  }
 	}
