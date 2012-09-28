@@ -35,11 +35,11 @@ that describe more-specific prefixes.
 
 =item Stub Networks
 
-A stub network is a special case of a network block and is used to
-designate a proper IP subnet, which does not contain any more-specific
-network blocks.  If the address map is viewed as a tree, only the
-leave nodes of it can be marked as stub networks (but a leave node
-does not have to describe a stub network).
+A stub network (or stub net for brevity) is a special case of a
+network block which does not contain any more-specific network blocks.
+If the address map is viewed as a tree, only the leave nodes of it can
+be marked as stub networks (but a leave node does not have to describe
+a stub network).
 
 A stub network contains IP addresses which can be assigned to host
 names as detailed below.
@@ -68,12 +68,12 @@ designated to the addressing of router loopback interfaces.  This
 correspondence can be reflected by assigning the same name to the
 addresses ranges of both address families used for this purpose.
 
-=item Stub Networks
+=item IP Subnets
 
-In an IPv6 environment, a stub network can have any number of prefixes
+In an IPv6 environment, an IP subnet can have any number of stub nets
 (at most one IPv4 and any number of IPv6 but at least one of any
-kind).  The name of a stub network collects all prefixes that make up
-a single IP subnet.
+kind).  The mapping between an IP subnet and the stub nets which it
+comprises is provided by the name.
 
 =back
 
@@ -81,12 +81,12 @@ a single IP subnet.
 
 This registry contains a mapping of interface identifiers to DNS host names.
 
-=item Stub Network Definition
+=item IP Subnet Definition
 
 The address map defines all stub networks that are contained in the
-managed address space.  Each stub network is mapped to a number of
-prefixes as described above.  The addresses covered by these prefixes
-can be assigned to host names in this section of the IPAM database.
+managed address space.  All stub networks with the same name form one
+distinct IP subnet.  The addresses covered by these stub nets can be
+assigned to host names in this section of the IPAM database.
 
 An address can be assigned to any number of hosts. At most one of them
 can be made the "canonical name" for the address by setting the
@@ -117,8 +117,8 @@ In addition, a canonical name can also have any number of aliases
 
 =item DNS Zone Registry
 
-All DNS names in the database are fully qualified (FQDN - fully
-qualified domain name).  In order to create fragments of DNS master
+All DNS names in the database are fully qualified (FQDN - Fully
+Qualified Domain Name).  In order to create fragments of DNS master
 files that can be included in the main zone master file, the zone cuts
 and locations of the master files must be configured into the IPAM
 database.  This is done by a simple association of a zone name to a
