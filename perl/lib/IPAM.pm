@@ -739,50 +739,55 @@ sub _process_host_node($$$$) {
     my $af_ttl = _ttl($af_node, $addr_ttl);
     if ($af == 6 and (not $af_node->hasAttribute('from-iid') or
 		      not $af_node->find('@from-iid[.=string(false())]'))) {
-      my $iid_lookup_fqdn = $host_fqdn;
+      my @iid_lookup_fqdns;
+      push(@iid_lookup_fqdns, $host_fqdn);
       unless ($af_node->find('@from-iid[.=string(true())]') or
 	      not $af_node->hasAttribute('from-iid')) {
-	### from-iid specifies a name from which to copy the IID.
-	### In that case, the host must not have its own IID.
+	### from-iid specifies a name or several names separated by
+	### ':', from which to copy the IID.  In that case, the host
+	### must not have its own IID.
 	my $iid = $self->{iid_r}->lookup($host_fqdn);
 	$iid and
 	  $self->_die_at_node($af_node, "$host_fqdn: Synthesizing of IPv6 "
 			      ."address from IID failed: references "
-			      ."$iid_lookup_fqdn but has its own IID "
+			      ."$host_fqdn but has its own IID "
 			      ."(".$iid->ip()->addr().")\n");
-	$iid_lookup_fqdn = $self->_fqdn($af_node->getAttribute('from-iid'));
+	@iid_lookup_fqdns = map { $self->_fqdn($_) }
+	  split(':', $af_node->getAttribute('from-iid'));
       }
-      if (my $iid = $self->{iid_r}->lookup($iid_lookup_fqdn)) {
-	if ($iid->use()) {
-	  ### Construct a IPv6 address from the host's IID for all
-	  ### the network's prefixes.
-	  $self->_verbose("Synthesizing IPv6 address for $host_fqdn "
-			  ."from IID.\n");
-	  foreach my $prefix ($network->prefixes(undef, $af)) {
-	    my $ip = $prefix->ip();
-	    $ip->masklen() == 64 or
-	      $self->_die_at_node($ip_node, "$host_fqdn: Synthesizing of "
-				  ."IPv6 address from IID failed: requires "
-				  ."a /64, but conflicts with $af "
-				  . $prefix->name());
-	    my ($active, $alt, $state) =
-	      $self->_check_alternative($af_node);
-	    push(@addrs, { af => $af,
-			   text => ipv6_n2x((add128($ip->aton(),
-						    $iid->ip()->aton()))[1]),
-			   node => $af_node,
-			   canonical => $canonical_af,
-			   reverse => $canonical_af eq 'true' ?
-			   $reverse_af : 'false',
-			   alt => [ $alt, $state ],
-			   dns => $host->dns() && $active});
-	    $iid->in_use(1);
+      foreach my $iid_lookup_fqdn (@iid_lookup_fqdns) {
+	if (my $iid = $self->{iid_r}->lookup($iid_lookup_fqdn)) {
+	  if ($iid->use()) {
+	    ### Construct a IPv6 address from the host's IID for all
+	    ### the network's prefixes.
+	    $self->_verbose("Synthesizing IPv6 address for $host_fqdn "
+			    ."from IID.\n");
+	    foreach my $prefix ($network->prefixes(undef, $af)) {
+	      my $ip = $prefix->ip();
+	      $ip->masklen() == 64 or
+		$self->_die_at_node($ip_node, "$host_fqdn: Synthesizing of "
+				    ."IPv6 address from IID failed: requires "
+				    ."a /64, but conflicts with $af "
+				    . $prefix->name());
+	      my ($active, $alt, $state) =
+		$self->_check_alternative($af_node);
+	      push(@addrs, { af => $af,
+			     text => ipv6_n2x((add128($ip->aton(),
+						      $iid->ip()->aton()))[1]),
+			     node => $af_node,
+			     canonical => $canonical_af,
+			     reverse => $canonical_af eq 'true' ?
+			     $reverse_af : 'false',
+			     alt => [ $alt, $state ],
+			     dns => $host->dns() && $active});
+	      $iid->in_use(1);
+	    }
 	  }
+	} elsif ($iid_lookup_fqdn ne $host_fqdn) {
+	  $self->_die_at_node($af_node, "$host_fqdn: Synthesizing of IPv6 "
+			      ."address from IID failed: references "
+			      ."$iid_lookup_fqdn, which has no IID.");
 	}
-      } elsif ($iid_lookup_fqdn ne $host_fqdn) {
-	$self->_die_at_node($af_node, "$host_fqdn: Synthesizing of IPv6 "
-			    ."address from IID failed: references "
-			    ."$iid_lookup_fqdn, which has no IID.");
       }
     }
 
