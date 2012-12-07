@@ -3,7 +3,7 @@
 #### Description:   IPAM::Prefix class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Prefix.pm,v 1.3 2012/09/03 09:53:52 gall Exp gall $
+#### RCS $Id: Prefix.pm,v 1.4 2012/09/04 09:26:45 gall Exp gall $
 
 package IPAM::Prefix;
 use IPAM;
@@ -170,11 +170,18 @@ is not numeric
 
 =item *
 
-is less or equal than the prefixe's own plen
+is less or equal than the prefix' own prefix length, except if the
+prefix length is the maximum for the address family, i.e.
 
-=item * 
+<net prefix="192.168.0.1/32" name="FOO"/>
 
-exceeds the maximum value for the prefixe's address family.
+is allowed.  This allows a short-cut for the assignment of
+loopback-style addresses for systems that are not really managed in
+the IPAM, e.g. routers.
+
+=item *
+
+exceeds the maximum value for the prefix' address family.
 
 =back
 
@@ -183,18 +190,22 @@ exceeds the maximum value for the prefixe's address family.
 sub plen($$) {
   my ($self, $plen) = @_;
   my $max_plen = $IPAM::af_info{$self->af()}{max_plen};
-  if (defined $plen) {
+  if (@_ > 1) {
+    if (defined $plen) {
       $plen =~ /^\d+$/ or
 	die "Can't set plen $plen for ".$self->name().": not numeric.\n";
       $plen <= $max_plen or
 	die "Can't set plen $plen for ".$self->name()
 	  .": larger than the maximum value $max_plen.\n";
-      $plen > $self->ip()->masklen() or
+      ($plen == $max_plen or $plen > $self->ip()->masklen()) or
 	die "Can't set plen $plen for ".$self->name()
-	  .": too small (must be >".$self->ip()->masklen().").\n";
-      $self->{plen} = $plen;
+	  .": must be larger than the prefix length\n";
+    }
+    $self->{plen} = $plen;
+    1;
+  } else {
+    return($self->{plen});
   }
-  return($self->{plen});
 }
 
 =item C<network($network)>
