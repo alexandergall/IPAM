@@ -524,9 +524,11 @@ sub _register_address_blocks($$@) {
     $prefix->description($node->findvalue('description'));
 
     ## Stub nets have an implicit "plen" of the maximum value of
-    ## the address family.
+    ## the address family.  This is important for the ipam-free
+    ## utility, which would otherwise aggregate addresses within
+    ## a stub net.
     $type eq 'net' and $plen = $af_info{$prefix->af()}{max_plen};
-    $prefix->plen($plen);
+    eval { $prefix->plen($plen) } or $self->_die_at_node($node, $@);
     eval { $prefix_upper->add($prefix) } or
       $self->_die_at_node($node, $@);
     if ($type eq 'net') {
