@@ -23,7 +23,7 @@ use Math::BigFloat;
 use Getopt::Long;
 
 my %opt = ( 'default-domain' => 'switch.ch.', stats => 'none',
-	  threshold => 0);
+	  threshold => 0, 'stub-limit' => 2**9 );
 my %af = ( '4' =>
 	   { bits => 32,
 	     nibbles => 8,
@@ -53,13 +53,13 @@ sub bigint_to_ip($$$);
 
 sub usage() {
   print <<"EOF";
-usage: $0 [--all] [--aggregate] [--stats=none|stub|all] [--recurse] [--threshold=<thresh>] <fqdn> | <prefix>
+usage: $0 [--all] [--aggregate] [--stats=none|stub|all] [--recurse] [--threshold=<thresh>] [--stub-limit=<stub-limit>] <fqdn> | <prefix>
 EOF
 exit(1);
 }
 
 GetOptions(\%opt, "defaul-domain=s", "all", "aggregate",
-	   "stats=s", "threshold=i", "recurse") or usage();
+	   "stats=s", "threshold=i", "stub-limit=i", "recurse") or usage();
 @ARGV == 1 or usage();
 exists $stat_modes{$opt{stats}} or usage();
 my $file = "$base_dir/ipam.xml";
@@ -78,7 +78,7 @@ if  ($ARGV[0] =~ /(\d+\.\d+\.\d+\.\d+|:|\/)/) {
   if (not $prefix and @path) {
     $prefix = pop(@path);
     warn "No match found for ".$ip->cidr().", using closest covering "
-      ."prerix ".$prefix->name()." instead.\n";
+      ."prefix ".$prefix->name()." instead.\n";
   } elsif (not $prefix and not @path) {
     die "No matching block or stub-net found for ".$ip->cidr();
   }
@@ -113,9 +113,14 @@ sub do_block($$) {
   my $addrs_free = Math::BigInt->new(0);
   my $addrs_assigned = Math::BigInt->new(0);
   if ($block->is_stub()) {
-    return(undef, undef) if $block->af() == 6;
     $addrs_free = sizeof($block->ip());
     $addrs_assigned = sizeof($block->ip());
+    ## We skip stub nets that are too big.  In particular,
+    ## this applies to all standard (/64) IPv6 stub nets.
+    if ($addrs_assigned > $opt{'stub-limit'}) {
+      warn "Skipping large stub net ".$block->name()." (> $opt{'stub-limit'} addresses, use --stub-limit to change)\n";
+      return(undef, undef);
+    }
   }
 
   ## Avoid duplicates if --recurse and --all are in effect and we're not
