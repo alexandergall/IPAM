@@ -531,17 +531,7 @@ sub _register_address_blocks($$@) {
     eval { $prefix->plen($plen) } or $self->_die_at_node($node, $@);
     eval { $prefix_upper->add($prefix) } or
       $self->_die_at_node($node, $@);
-
-    ### Stub nets are registered in the DNS as a pair of A/PTR
-    ### and a AAAA record for IPv4 and IPv6, respectively.
-    ### As an exception, no DNS records are generated if the
-    ### network is a /32 or /128.  Such a network can be used
-    ### as a shortcut to allocate loopback-type addresses
-    ### without having to use a <network> element.  The actual
-    ### DNS records for these addresses are expected to be
-    ### generated outside the IPAM (like in the case for router
-    ### loopback addresses).
-    if ($type eq 'net' and $plen != $af_info{$prefix->af()}{max_plen}) {
+    if ($type eq 'net') {
       if ($prefix->af() == 4) {
 	eval { $self->{zone_r}->add_rr($node, $fqdn, undef, 'PTR',
 				       $prefix->ip()->addr().'.',
