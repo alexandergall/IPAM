@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.11 2012/09/11 12:50:21 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.12 2012/09/28 09:59:03 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -160,7 +160,7 @@ sub print($$$$) {
 	if (exists $rdata{$rr->{rdata}}) {
 	  ($type ne 'PTR' and $type ne 'LOC') and
 	    warn "BUG: skipping unexpected duplicate RR: $type ".$rr->{rdata}
-	      ."\n";
+	      ." for ".($self->name() ? $self->name() : '@')."\n";
 	  next;
 	}
 	$rdata{$rr->{rdata}} = 1;
