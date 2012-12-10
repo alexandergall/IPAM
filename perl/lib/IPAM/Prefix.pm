@@ -3,7 +3,7 @@
 #### Description:   IPAM::Prefix class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Prefix.pm,v 1.4 2012/09/04 09:26:45 gall Exp gall $
+#### RCS $Id: Prefix.pm,v 1.5 2012/12/07 11:20:31 gall Exp gall $
 
 package IPAM::Prefix;
 use IPAM;
@@ -170,14 +170,7 @@ is not numeric
 
 =item *
 
-is less or equal than the prefix' own prefix length, except if the
-prefix length is the maximum for the address family, i.e.
-
-<net prefix="192.168.0.1/32" name="FOO"/>
-
-is allowed.  This allows a short-cut for the assignment of
-loopback-style addresses for systems that are not really managed in
-the IPAM, e.g. routers.
+is less or equal than the prefix' own prefix length.
 
 =item *
 
@@ -197,7 +190,7 @@ sub plen($$) {
       $plen <= $max_plen or
 	die "Can't set plen $plen for ".$self->name()
 	  .": larger than the maximum value $max_plen.\n";
-      ($plen == $max_plen or $plen > $self->ip()->masklen()) or
+      $plen > $self->ip()->masklen() or
 	die "Can't set plen $plen for ".$self->name()
 	  .": must be larger than the prefix length\n";
     }
