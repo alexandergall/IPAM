@@ -3,7 +3,7 @@
 #### Description:   IPAM::Thing class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Thing.pm,v 1.6 2012/09/04 06:35:51 gall Exp gall $
+#### RCS $Id: Thing.pm,v 1.7 2012/09/11 11:43:56 gall Exp gall $
 package IPAM::Thing;
 
 =head1 NAME
@@ -46,6 +46,17 @@ TTL of these records is derived from the Thing's TTL attribute. The
 TTL is inherited from higher to lower levels of hierarchy within the
 IPAM database.
 
+=item Tags
+
+A tag is an arbitrary label that is assigned to the Thing.  The
+semantics of a tag is unknown to the IPAM.  It can be used to identify
+Things that have some property that cannot be expressed within the
+data model of the IPAM.  Tags can be applied as filters to the results
+of queries to the IPAM database.
+
+A Thing can have any number of tags.  Tags are either set explicitely
+for a Thing or inherited through the hierarchy in the IPAM data model.
+
 =back
 
 =head1 CLASS METHODS
@@ -57,8 +68,8 @@ IPAM database.
   my $thing = IPAM::Thing->new($node, $name);
 
 Creates a new thing called $name and associates the
-L<XML::LibXML::Node> object $node with it, which may be undefined if
-the thing is not associated with any XML node in the IPAM database.
+L<XML::LibXML::Node> object C<$node> with it, which may be undefined
+if the thing is not associated with any XML node in the IPAM database.
 
 =back
 
@@ -66,7 +77,8 @@ the thing is not associated with any XML node in the IPAM database.
 
 sub new($$$) {
   my ($class, $node, $name) = @_;
-  my $self = { node => $node, name => $name, description => '', ttl => undef };
+  my $self = { node => $node, name => $name, description => '', ttl => undef,
+	     tags => {} };
   return(bless($self, $class));
 }
 
@@ -156,6 +168,130 @@ sub ttl($$) {
   my ($self, $ttl) = @_;
   @_ > 1 and return($self->{ttl} = $ttl);
   return($self->{ttl});
+}
+
+=item C<has_tag($tag)>
+
+  $thing->has_tag('foo') and
+    print $thing->name()." is tagged as foo\n";
+
+Returns a true value if C<$thing> is tagged with the label 'foo',
+false otherwise.
+
+=cut
+
+sub has_tag($$) {
+  my ($self, $tag) = @_;
+  return(exists($self->{tags}{$tag}));
+}
+
+=item C<tags()>
+
+  my $tags = $thing->tags();
+  foreach my $tag (keys(%$tags)) {
+    print "$tag\n";
+  }
+
+Returns a reference to a hash whose keys are the tags assigned to
+C<$thing>.  The associated value of a tag is a reference to an array
+of L<IPAM::Thing> objects which the tag was inherited from.  An empty
+array indicates that the tag was set explicitely for the Thing.
+
+=cut
+
+sub tags($) {
+  my ($self) = @_;
+  return(\%{$self->{tags}});
+}
+
+=item C<tags_iterator()>
+
+  my $next_tag = $thing->tags_iterator();
+  while (my ($tag, $things_ref) = next_tag->()) {
+    print "Tag $tag ".(@$things_ref ?
+      "inherited from ".join(', ', map { $_->name() } @$things_ref) : '')."\n";
+  }
+
+Returns a closure which iterates through the list of tags assigned to
+the Thing.  Upon each invocation, it returns the next tag and the
+associated refrence to an array of L<IPAM::Thing> objects as in the
+L<IPAM::Thing::tags> instance method.  An empty list is returned after
+the last tag has been processed.
+
+=cut
+
+sub tags_iterator($) {
+  my ($self) = @_;
+  my @tags = keys(%{$self->{tags}});
+  return( sub {
+	    my $tag = pop(@tags) or return();
+	    return($tag, $self->{tags}{$tag});
+	  });
+}
+
+=item C<set_tags($tags, @things)>
+
+  eval { $thing->set_tags($tags, $inherit) } or die $@;
+
+This method initializes the set of tags for the Thing.  First, all
+tags associated with the L<IPAM::Thing> objects in C<@things> are
+copied to the Thing.  This is the manner in which tags are inherited.
+Note that the same tag can be inherited from multiple Things.
+
+Apart from inheritance, a Thing can also be configured with its own
+set of tags (which, in turn, may be inherited by other Things).  This
+set is passed in the C<$tags> argument of the method as a string of
+tag names separated by colons.  If the first character of a tag is a
+hyphen ('-'), the remainder of the tag is interpreted as the name of a
+tag which is to be deleted from the set of inherited tags.
+
+An exception is rised if
+
+=over 4
+
+=item 
+
+One of the explicit tags in C<$tags> does not match the regexp \w+
+
+=item
+
+A tag with a leading hyphen does not reference an inherited tag
+
+=item
+
+An explicite tag is identical to an inherited tag
+
+=back
+
+=cut
+
+sub set_tags($$@) {
+  my ($self, $tags, @things) = @_;
+  foreach my $thing (@things) {
+    next unless $thing->isa('IPAM::Thing');
+    ### Inherit tags from $thing
+    my $next = $thing->tags_iterator();
+    while (my ($tag, $things_ref) = $next->()) {
+      push(@{$self->{tags}{$tag}}, $thing);
+    }
+  }
+  ### Set own tags
+  foreach my $tag (split(':', $tags)) {
+    $tag =~ /\w+/ or die $self->name().": illegal tag \'$tag\'\n";
+    if ($tag =~ /^-/) {
+      $tag =~ s/^-//;
+      exists $self->{tags}{$tag} or
+	die $self->name().": can't delete non-inherited tag $tag\n";
+      delete $self->{tags}{$tag};
+    } else {
+      exists $self->{tags}{$tag} and
+	die $self->name().": duplicate definition of tag $tag "
+	  ."(inherited from "
+	    .join(',', map { $_->name() } @{$self->{tags}{$tag}}).")\n";
+      $self->{tags}{$tag} = [];
+    }
+  }
+  1;
 }
 
 =back
