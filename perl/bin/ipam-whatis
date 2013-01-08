@@ -22,7 +22,7 @@ my (%visited_fqdns, %visited_prefixes, %visited_hosts);
 
 sub usage() {
   print <<"EOF";
-usage: $0 [--default-domain=<domain>] [--detail] [--no-stub-recurse] [--recurse=<level>] <fqdn> | <address> | <prefix> ...
+usage: $0 [--default-domain=<domain>] [--detail] [--warnings] [--no-stub-recurse] [--recurse=<level>] <fqdn> | <address> | <prefix> ...
 EOF
 exit(1);
 }
@@ -243,6 +243,12 @@ sub detail($$) {
   ($file and $line) and indent($indent, "It is defined at $file, line $line\n");
   my $desc = $node->description();
   $desc and indent($indent, "It has the description: $desc\n");
+  my $next = $node->tags_iterator();
+  while (my ($tag, $things_ref) = $next->()) {
+    indent($indent, "It has the tag: $tag"
+	   .(@$things_ref ? " (inherited from "
+	     .join(', ', map { $_->name() } @$things_ref).")" : '')."\n");
+  }
 }
 
 sub print_pf_registry($$$) {
