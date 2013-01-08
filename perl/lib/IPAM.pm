@@ -281,6 +281,9 @@ sub load($$) {
 	or $self->_die_at_node($network_node, "Network ".$network->name()
 			       ." is not associated with any prefixes\n");
     map { $network->add_prefix($_); $_->network($network) } @network_prefixes;
+    eval { $network->set_tags($network_node->getAttribute('tag'),
+			      @network_prefixes) }
+      or $self->_die_at_node($network_node, $@);
     ($network->prefixes(undef, 4) <= 1) or
       $self->_die_at_node($network_node, "Network ".$network->name()
 			  ." can't be associated with more than one IPv4"
@@ -522,6 +525,8 @@ sub _register_address_blocks($$@) {
 					  $fqdn, $type eq 'net' ? 1 : 0) }
       or $self->_die_at_node($node, $@);
     $prefix->description($node->findvalue('description'));
+    eval { $prefix->set_tags($node->getAttribute('tag'), $prefix_upper) }
+      or $self->_die_at_node($node, $@);
 
     ## Stub nets have an implicit "plen" of the maximum value of
     ## the address family.  This is important for the ipam-free
@@ -695,8 +700,10 @@ sub _process_host_node($$$$) {
   ## the node of the corresponding <generate> element as origin node.
   my $host = IPAM::Host->new($gen_node ? $gen_node : $node,
 			     $host_fqdn, $network);
-  eval { $network->add_host($host) } or $self->_die_at_node($node, $@);
   $host->description($node->findvalue('description'));
+  eval { $host->set_tags($node->getAttribute('tag'), $network) }
+    or $self->_die_at_node($node, $@);
+  eval { $network->add_host($host) } or $self->_die_at_node($node, $@);
   ## If the host has no TTL, inherit the TTL from the zone
   my ($zone) = $self->{zone_r}->lookup_fqdn($host_fqdn);
   defined $zone or
