@@ -3,7 +3,7 @@
 # ## Description:   RelaxNG schema for the IPAM <address-map> element
 # ## Author:        Alexander Gall <gall@switch.ch>
 # ## Created:       Sep 4 2012
-# ## RCS $Id: address-map.rnc,v 1.7 2012/09/10 15:15:49 gall Exp gall $
+# ## RCS $Id: address-map.rnc,v 1.8 2012/09/10 15:28:41 gall Exp gall $
 # ##
 
 start = address-map
@@ -16,6 +16,7 @@ address-map = element address-map {
 net = element net {
    attribute prefix { text },
    attribute name { text },
+   attribute tag { text }?,
    element description { text }?
 }
 
@@ -23,6 +24,7 @@ block = element block {
    attribute prefix { text },
    attribute name { text },
    attribute plen { xsd:integer }?,
+   attribute tag { text }?,
    element description { text }?,
    ( net* & block* )
 }
