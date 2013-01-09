@@ -3,7 +3,7 @@
 #### Description:   IPAM::Thing class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Thing.pm,v 1.7 2012/09/11 11:43:56 gall Exp gall $
+#### RCS $Id: Thing.pm,v 1.8 2013/01/08 16:15:02 gall Exp gall $
 package IPAM::Thing;
 
 =head1 NAME
@@ -170,19 +170,22 @@ sub ttl($$) {
   return($self->{ttl});
 }
 
-=item C<has_tag($tag)>
+=item C<has_tags(@tags)>
 
-  $thing->has_tag('foo') and
-    print $thing->name()." is tagged as foo\n";
+  $thing->has_tag(qw/foo bar/) and
+    print $thing->name()." is tagged as foo and bar\n";
 
-Returns a true value if C<$thing> is tagged with the label 'foo',
-false otherwise.
+Returns a true value if C<$thing> is tagged with all labels in
+C<@tags>, false otherwise.  An empty list matches all tags.
 
 =cut
 
-sub has_tag($$) {
-  my ($self, $tag) = @_;
-  return(exists($self->{tags}{$tag}));
+sub has_tags($@) {
+  my ($self, @tags) = @_;
+  foreach my $tag (@tags) {
+    exists $self->{tags}{$tag} or return(undef);
+  }
+  1;
 }
 
 =item C<tags()>
