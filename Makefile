@@ -22,7 +22,7 @@ install.perl: perl/Makefile
 perl/Makefile: perl/Makefile.PL
 	cd perl && perl Makefile.PL INSTALL_BASE=$(INSTALL_DIR)
 
-$(INSTALL_DIR)/Makefile: Makefile.IPAM
+$(INSTALL_DIR)/Makefile: Makefile.in
 	$(transform)
 
 $(INSTALL_DIR)/schemas.xml: schemas/schemas.xml.in
