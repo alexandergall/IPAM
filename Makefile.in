@@ -1,0 +1,63 @@
+export IPAM_BASE = @@IPAM_BASE@@
+
+PATH = /bin:/usr/bin:$(IPAM_BASE)/bin
+
+JING = java -Dorg.apache.xerces.xni.parser.XMLParserConfiguration=org.apache.xerces.parsers.XIncludeParserConfiguration -jar /usr/share/java/jing.jar
+FIND = find
+GEN-ZONES = ipam-gen-zones
+DIFF = diff
+RM = rm
+
+.DEFAULT_GOAL = zones
+
+### Validate ipam.xml aginst the schema.  It appears that only James Clark
+### is able to write a working RelaxNG vlaidator :(  The validator based on
+### libxml2 is buggy, which makes XML::LibXML::RelaxNG unusable as well.
+### For now, we perform validation outside of the IPAM Perl module using
+### jing.
+validate: ipam.xml alternatives.xml address-map.xml iid.xml zones.xml $(wildcard networks/*.xml)
+	@$(JING) -c schemas/ipam.rnc ipam.xml
+	@umask 002; touch $@
+
+### Show the differences of all currently checked-out files which have
+### been modified since the last successful validation.
+diff:
+	@$(FIND) . -name "*.xml" -newer validate -exec rcsdiff -u {} \;
+
+### Generate zone file snippets and rebuild the zones.  The snippets
+### are written to a local directory and compared to the d.ipam files
+### currently installed in the proper zone directories.  The newly
+### generated files are installed only if they differ from the old ones
+### to avoid building the zone unnecessarily.
+zones: validate zones/.links.stamp
+	@umask 002; \
+	set -e; \
+	$(GEN-ZONES); \
+	for file in zones/*; do \
+		[ -f $$file ] || continue; \
+		[ -h $${file}install ] || continue; \
+		dest=`readlink $${file}install`; \
+		[ -f $$dest ] || touch $$dest; \
+		if ! $(DIFF) $$file $${file}install >/dev/null; then \
+			rm -f $$dest.old; \
+			mv $$dest $$dest.old; \
+			cp $$file $$dest; \
+			(cd `dirname $$dest` && make); \
+		else \
+			echo No changes in `basename $$file`; \
+		fi; \
+	done; \
+	touch $@
+
+### The zone snippets are written to the directory "zones" within the
+### IPAM.  Each zone has associated with it a symbolic link named
+### zones/<zone>.install, which points to the actual d.ipam file in
+### the proper zone directory.
+zones/.links.stamp: zones.xml
+	@umask 002; \
+	set -e; \
+	$(RM) -f zones/*; \
+	$(GEN-ZONES) --conf | while read zone dir; do \
+		ln -s $$dir/d.ipam zones/$${zone}install; \
+	done; \
+	touch $@

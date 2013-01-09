@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<locatingRules xmlns="http://thaiopensource.com/ns/locating-rules/1.0">
+  <uri resource="alternatives.xml" uri="@@IPAM_BASE@@/schemas/alternatives.rnc"/>
+  <uri resource="address-map.xml" uri="@@IPAM_BASE@@/schemas/address-map.rnc"/>
+  <uri resource="ipam.xml" uri="@@IPAM_BASE@@/schemas/ipam.rnc"/>
+  <uri resource="iid.xml" uri="@@IPAM_BASE@@/schemas/iid.rnc"/>
+  <uri resource="zones.xml" uri="@@IPAM_BASE@@/schemas/zones.rnc"/>
+</locatingRules>

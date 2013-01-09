@@ -1,0 +1,24 @@
+namespace xi = "http://www.w3.org/2001/XInclude"
+
+start |= block
+
+net = element net {
+   attribute prefix { text },
+   attribute name { text },
+   attribute tag { text }?,
+   element description { text }?
+}
+
+block = element block {
+   attribute xml:base { text }?,
+   attribute prefix { text },
+   attribute name { text },
+   attribute plen { xsd:integer }?,
+   attribute tag { text }?,
+   element description { text }?,
+   ( net* & block* &
+      element xi:include {
+         attribute href { text },
+         empty
+      }*)
+}
