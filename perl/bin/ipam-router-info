@@ -4,9 +4,13 @@
 #### Description:   Extract router/interface for subnets in the IPAM
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jan 10 2013
-#### RCS $Id$
+#### RCS $Id: ipam-router-info,v 1.1 2013/01/10 11:11:35 gall Exp gall $
 ####
 #### This command works as a filter for the output of "getciscoaddr --networks".
+
+## Local Variables:
+## mode: CPerl
+## End:
 
 my $base_dir;
 BEGIN {
