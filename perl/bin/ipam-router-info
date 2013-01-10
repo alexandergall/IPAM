@@ -1,0 +1,65 @@
+#!/usr/bin/perl
+####
+#### File name:     ipam-router-info
+#### Description:   Extract router/interface for subnets in the IPAM
+#### Author:        Alexander Gall <gall@switch.ch>
+#### Created:       Jan 10 2013
+#### RCS $Id$
+####
+#### This command works as a filter for the output of "getciscoaddr --networks".
+
+my $base_dir;
+BEGIN {
+  $base_dir = '/home/noc/IPAM';
+  if (exists $ENV{IPAM_BASE}) {
+    $base_dir = $ENV{IPAM_BASE};
+  }
+}
+use strict;
+use warnings;
+use lib "$base_dir/lib/perl5";
+use IPAM 0.01;
+use Getopt::Long;
+
+my %networks;
+
+@ARGV or die "usage: $0 <subnet> ...\n";
+my $file = "$base_dir/ipam.xml";
+system("cd $base_dir && make --silent validate") == 0 or die;
+my $ipam = IPAM->new({ verbose => undef, base_dir => $base_dir,
+		       validate => undef, warnings => undef});
+$ipam->load($file);
+
+while (<STDIN>) {
+  my ($router, $interface, $prefix, $address, $description) = split('%');
+  chomp($description);
+  my $ip = NetAddr::IP->new($prefix) or
+    die "Malformed prefix: $prefix";
+  my $ip_addr = NetAddr::IP->new($address) or
+    die "Malformed address: $address";
+  my $cidr = $ip->cidr();
+  $networks{$cidr}{ip} = $ip;
+  push(@{$networks{$cidr}{interfaces}}, { name => $interface,
+					  router => $router,
+					  addr => $ip_addr,
+					  desc => $description, });
+}
+
+foreach my $subnet (@ARGV) {
+  my $network = $ipam->registry(IPAM::REG_NETWORK)->lookup($subnet)
+    or die "Unknown subnet $subnet";
+  print "$subnet\n";
+  foreach my $prefix ($network->prefixes(sub { $_[0]->ip() <=> $_[1]->ip(); })) {
+    my $cidr = $prefix->ip()->cidr();
+    print "  Prefix: $cidr\n";
+    if (exists $networks{$cidr}) {
+      foreach my $if (@{$networks{$cidr}{interfaces}}) {
+	print "    Router: ".$if->{router}."\n";
+	print "      Interface: ".$if->{name}."\n";
+	$if->{desc} and print "      Description: ".$if->{desc}."\n";
+      }
+    } else {
+      print "    Not configured on any router\n";
+    }
+  }
+}
