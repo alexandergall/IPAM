@@ -1,0 +1,92 @@
+#!/usr/bin/perl
+####
+#### File name:     ipam-select
+#### Description:   Select objects based on type and tag
+#### Author:        Alexander Gall <gall@switch.ch>
+#### Created:       Jan 10 2013
+#### RCS $Id$
+####
+
+my $base_dir;
+BEGIN {
+  $base_dir = '/home/noc/IPAM';
+  if (exists $ENV{IPAM_BASE}) {
+    $base_dir = $ENV{IPAM_BASE};
+  }
+}
+use strict;
+use warnings;
+use lib "$base_dir/lib/perl5";
+use IPAM 0.01;
+use Getopt::Long;
+
+my @types = qw/block net subnet host/;
+my %opt = ( type => 'subnet', );
+
+sub walk_registry($);
+my $sort_by_ip = sub { my ($a, $b) = @_; $a->ip() <=> $b->ip(); };
+my $sort_by_name = sub { my ($a, $b) = @_; $a->name() cmp $b->name(); };
+
+sub usage() {
+  print <<"EOF";
+usage: $0 [--tag=<tag> ...] [--type=block|net|subnet|host] [--detail]
+EOF
+exit(1);
+}
+
+GetOptions(\%opt, 'tag=s@', 'type=s', 'detail') or usage();
+grep /^$opt{type}$/, @types or usage();
+
+my $file = "$base_dir/ipam.xml";
+system("cd $base_dir && make --silent validate") == 0 or die;
+my $ipam = IPAM->new({ verbose => undef, base_dir => $base_dir,
+		       validate => undef, warnings => undef});
+$ipam->load($file);
+
+if (grep /^$opt{type}$/, qw/block net/) {
+  walk_registry($ipam->address_map()->registry());
+}
+
+if ($opt{type} eq 'subnet') {
+  my $next = $ipam->registry(IPAM::REG_NETWORK)->iterator($sort_by_name);
+  while (my $network = $next->()) {
+    next unless $network->has_tags(@{$opt{tag}});
+    print $network->name()."\n";
+    if ($opt{detail}) {
+      my $desc = $network->description();
+      $desc and print "  Description: $desc\n";
+      map { print "  Prefix: ".$_->name()."\n" } $network->prefixes($sort_by_ip);
+    }
+  }
+}
+
+if ($opt{type} eq 'host') {
+  my @hosts;
+  my $next_net = $ipam->registry(IPAM::REG_NETWORK)->iterator();
+  while (my $network = $next_net->()) {
+    foreach my $host ($network->host_registry()->things()) {
+      next unless $host->has_tags(@{$opt{tag}});
+      push(@hosts, $host);
+    }
+  }
+  map { print $_->name()."\n" } sort { $a->name() cmp $b->name() } @hosts;
+}
+
+sub walk_registry($) {
+  my ($reg) = @_;
+  my $next = $reg->iterator($sort_by_ip);
+  while (my $prefix = $next->()) {
+    if ($prefix->has_tags(@{$opt{tag}})) {
+      if (($opt{type} eq 'net' and $prefix->is_stub()) or
+	  ($opt{type} eq 'block' and not $prefix->is_stub())) {
+	print $prefix->name()."\n";
+	if ($opt{detail}) {
+	  my $desc = $prefix->description();
+	  $desc and print "  Description: $desc\n";
+	  print "  Name: ".$prefix->id()."\n";
+	}
+      }
+    }
+    walk_registry($prefix->registry()) unless $prefix->is_stub();
+  }
+}
