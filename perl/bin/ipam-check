@@ -10,12 +10,6 @@ BEGIN {
 use strict;
 use warnings;
 use lib "$base_dir/lib/perl5";
-## The recursive filler() routine can trigger "deep recursion"
-## warnings if a block is large and sparsely populated.
-## One can force aggregation with the "--agregate" option
-## to avoid problems with this (in particular with large
-## IPv6 blocks).
-no warnings "recursion";
 use IPAM 0.01;
 use Getopt::Long;
 
