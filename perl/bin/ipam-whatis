@@ -256,7 +256,7 @@ sub print_pf_registry($$$) {
   my $recurse_save = $opt{recurse};
   $opt{recurse}--;
   $opt{recurse} < 0 and $opt{recurse} = 0;
-  my $next = $reg->iterator(sub { my ($a, $b) = @_; $b->ip() cmp $a->ip(); },
+  my $next = $reg->iterator(sub { my ($a, $b) = @_; $a->ip() <=> $b->ip(); },
 			    $af);
   while (my $prefix = $next->()) {
     indent($indent, sprintf("%-35s  %-30s %-30s\n", $prefix->name(),
