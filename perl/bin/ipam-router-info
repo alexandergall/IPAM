@@ -4,9 +4,23 @@
 #### Description:   Extract router/interface for subnets in the IPAM
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jan 10 2013
-#### RCS $Id: ipam-router-info,v 1.1 2013/01/10 11:11:35 gall Exp gall $
+#### RCS $Id: ipam-router-info,v 1.2 2013/01/10 15:25:18 gall Exp gall $
 ####
-#### This command works as a filter for the output of "getciscoaddr --networks".
+####
+#### This command works as a filter for the output of "getciscoaddr
+#### --networks" to display the router configurations for particular
+#### IP prefixes.  IP prefixes can either be supplied directly as
+#### arguments to ipam-router-info or indirectly through domain
+#### names.
+####
+#### A domain name is first looked up in the IPAM registry for IP
+#### subnets.  If a match is found, the router configuration for each
+#### prefix associated with the subnet is displayed.  If no match is
+#### found, the domain name is looked up in the address map and the
+#### router configuration for all matching prefixes is displayed.  If
+#### a domain name is neither a subnet nor a prefix known to the IPAM,
+#### the name is skipped and a warning is issued.
+####
 
 ## Local Variables:
 ## mode: CPerl
@@ -26,8 +40,19 @@ use IPAM 0.01;
 use Getopt::Long;
 
 my %networks;
+my $indent_unit = 2;
 
-@ARGV or die "usage: $0 <subnet> ...\n";
+sub router_info($$);
+sub indent($$);
+
+sub usage() {
+  print <<"EOF";
+usage: $0 <subnet> | <network> | <literal-prefix> ...
+EOF
+exit(1);
+}
+
+@ARGV or usage();
 my $file = "$base_dir/ipam.xml";
 system("cd $base_dir && make --silent validate") == 0 or die;
 my $ipam = IPAM->new({ verbose => undef, base_dir => $base_dir,
@@ -49,21 +74,49 @@ while (<STDIN>) {
 					  desc => $description, });
 }
 
-foreach my $subnet (@ARGV) {
-  my $network = $ipam->registry(IPAM::REG_NETWORK)->lookup($subnet)
-    or die "Unknown subnet $subnet";
-  print "$subnet\n";
-  foreach my $prefix ($network->prefixes(sub { $_[0]->ip() <=> $_[1]->ip(); })) {
-    my $cidr = $prefix->ip()->cidr();
-    print "  Prefix: $cidr\n";
-    if (exists $networks{$cidr}) {
-      foreach my $if (@{$networks{$cidr}{interfaces}}) {
-	print "    Router: ".$if->{router}."\n";
-	print "      Interface: ".$if->{name}."\n";
-	$if->{desc} and print "      Description: ".$if->{desc}."\n";
-      }
+foreach my $item (@ARGV) {
+  if ($item =~ /(\d+\.\d+\.\d+\.\d+|:|\/)/) {
+    my ($ip, $prefix);
+    $ip = NetAddr::IP->new($item) or die "Malformed prefix $item";
+    unless ($prefix = $ipam->address_map()->lookup_by_ip($ip)) {
+      warn "Unknown prefix $item\n";
+      next;
+    }
+    print $prefix->ip()->cidr()."\n";
+    router_info($prefix, 1);
+  } else {
+    my ($network, @prefixes);
+    if ($network = $ipam->registry(IPAM::REG_NETWORK)->lookup($item)) {
+      @prefixes = $network->prefixes(sub { $_[0]->ip() <=> $_[1]->ip(); });
     } else {
-      print "    Not configured on any router\n";
+      unless (@prefixes = $ipam->address_map()->lookup_by_id($item)) {
+	warn "Unknown prefix or subnet $item";
+	next;
+      }
+    }
+    print "$item\n";
+    foreach my $prefix (@prefixes) {
+      indent(1, "Prefix: ".$prefix->ip()->cidr()."\n");
+      router_info($prefix, 2);
     }
   }
+}
+
+sub router_info($$) {
+  my ($prefix, $indent) = @_;
+  my $cidr = $prefix->ip()->cidr();
+  if (exists $networks{$cidr}) {
+    foreach my $if (@{$networks{$cidr}{interfaces}}) {
+      indent($indent, "Router: ".$if->{router}."\n");
+      indent($indent+1, "Interface: ".$if->{name}."\n");
+      $if->{desc} and indent($indent+1, "Description: ".$if->{desc}."\n");
+    }
+  } else {
+    indent($indent, "Not configured on any router\n");
+  }
+}
+
+sub indent($$) {
+  my ($level, $msg) = @_;
+  print ' 'x($level*$indent_unit).$msg;
 }
