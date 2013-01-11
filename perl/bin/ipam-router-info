@@ -4,14 +4,14 @@
 #### Description:   Extract router/interface for subnets in the IPAM
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jan 10 2013
-#### RCS $Id: ipam-router-info,v 1.2 2013/01/10 15:25:18 gall Exp gall $
+#### RCS $Id: ipam-router-info,v 1.3 2013/01/11 11:29:40 gall Exp gall $
 ####
 ####
 #### This command works as a filter for the output of "getciscoaddr
 #### --networks" to display the router configurations for particular
 #### IP prefixes.  IP prefixes can either be supplied directly as
-#### arguments to ipam-router-info or indirectly through domain
-#### names.
+#### arguments to ipam-router-info or indirectly through domain names.
+#### Literal prefixes are looked up in the IPAM address map.
 ####
 #### A domain name is first looked up in the IPAM registry for IP
 #### subnets.  If a match is found, the router configuration for each
@@ -83,6 +83,7 @@ foreach my $item (@ARGV) {
       next;
     }
     print $prefix->ip()->cidr()."\n";
+    indent(1, "Name: ".$prefix->id()."\n");
     router_info($prefix, 1);
   } else {
     my ($network, @prefixes);
