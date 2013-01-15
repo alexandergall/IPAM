@@ -15,7 +15,7 @@ RM = rm
 ### libxml2 is buggy, which makes XML::LibXML::RelaxNG unusable as well.
 ### For now, we perform validation outside of the IPAM Perl module using
 ### jing.
-validate: ipam.xml alternatives.xml address-map.xml iid.xml zones.xml $(wildcard networks/*.xml)
+validate: ipam.xml alternatives.xml address-map.xml iid.xml zones.xml $(wildcard networks/*.xml net-*/networks/*.xml)
 	@$(JING) -c schemas/ipam.rnc ipam.xml
 	@umask 002; touch $@
 
