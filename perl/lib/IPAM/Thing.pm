@@ -3,7 +3,7 @@
 #### Description:   IPAM::Thing class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Thing.pm,v 1.8 2013/01/08 16:15:02 gall Exp gall $
+#### RCS $Id: Thing.pm,v 1.9 2013/01/09 16:03:25 gall Exp gall $
 package IPAM::Thing;
 
 =head1 NAME
@@ -27,11 +27,12 @@ This is an arbitrary string that identifies the Thing.  If the Thing
 is part of a L<IPAM::Registry>, the name converted to lower-case will
 be unique within the registry.
 
-=item Node
+=item Nodeinfo
 
 Most Things in the IPAM are derived from an XML element in the IPAM
-database.  In this case, the node attribute of a Thing is a reference
-to the L<XML::LibXML::Node> object from which it was constructed.
+database.  In this case, the nodeinfo attribute of a Thing stores the
+file name and line number where the XML element from which the Thing
+was constructed is defined.
 
 =item Description
 
@@ -67,8 +68,8 @@ for a Thing or inherited through the hierarchy in the IPAM data model.
 
   my $thing = IPAM::Thing->new($node, $name);
 
-Creates a new thing called $name and associates the
-L<XML::LibXML::Node> object C<$node> with it, which may be undefined
+Creates a new thing called $name and derives the nodeinfo attribute
+from the L<XML::LibXML::Node> object C<$node>, which may be undefined
 if the thing is not associated with any XML node in the IPAM database.
 
 =back
@@ -77,8 +78,8 @@ if the thing is not associated with any XML node in the IPAM database.
 
 sub new($$$) {
   my ($class, $node, $name) = @_;
-  my $self = { node => $node, name => $name, description => '', ttl => undef,
-	     tags => {} };
+  my $self = { nodeinfo => [ IPAM::_nodeinfo($node) ], name => $name,
+	       description => '', ttl => undef, tags => {} };
   return(bless($self, $class));
 }
 
@@ -99,33 +100,19 @@ sub name($) {
   return($self->{name});
 }
 
-=item C<node()>
-
-  my $node = $thing->node();
-
-Returns a reference to the L<XML::LibXML::Node> object associated with
-the Thing.
-
-=cut
-
-sub node($) {
-  my ($self) = @_;
-  return($self->{node});
-}
-
 =item C<nodeifno()>
 
   my ($file, $line) = $thing->nodeinfo();
 
 Returns the file name and line number where the XML node associated
-with the Thing is defined or undef if no node is associated with the
-Thing.
+with the Thing is defined or an empty list if no node is associated
+with the Thing.
 
 =cut
 
 sub nodeinfo($) {
   my ($self) = @_;
-  return(IPAM::_nodeinfo($self->{node}));
+  return(@{$self->{nodeinfo}});
 }
 
 =item C<description()>
