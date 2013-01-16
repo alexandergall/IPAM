@@ -3,7 +3,7 @@
 #### Description:   IPAM::Zone class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Zone.pm,v 1.2 2012/09/04 13:31:25 gall Exp gall $
+#### RCS $Id: Zone.pm,v 1.3 2012/09/11 11:40:48 gall Exp gall $
 
 package IPAM::Zone;
 use IPAM::Thing;
@@ -174,9 +174,9 @@ sub lookup_fqdn($$) {
   return(undef);
 }
 
-=item C<add_rr($node, $fqdn, $ttl, $type, $rdata, $comment, $dns)>
+=item C<add_rr($fqdn, $ttl, $type, $rdata, $comment, $dns, @nodeinfo)>
 
-  eval { $zone_r->add_rr($node, $fqdn, $ttl, $type, $rdata, $comment, $dns);
+  eval { $zone_r->add_rr($fqdn, $ttl, $type, $rdata, $comment, $dns, @nodeinfo);
 
 Finds the zone and domain for C<$fqdn> and adds the specified resource
 record by calling the C<add_rr()> instance method of the resulting
@@ -187,8 +187,8 @@ If C<$ttl> is undefined, the zone's default ttl is substituted.
 
 =cut
 
-sub add_rr($$$$$$$$) {
-  my ($self, $node, $fqdn, $ttl, $type, $rdata, $comment, $dns) = @_;
+sub add_rr($$$$$$$@) {
+  my ($self, $fqdn, $ttl, $type, $rdata, $comment, $dns, @nodeinfo) = @_;
   my ($zone, $name) = $self->lookup_fqdn($fqdn);
   defined ($zone) or
     die "Can't associate $fqdn with any configured zone\n";
@@ -198,7 +198,7 @@ sub add_rr($$$$$$$$) {
     $zone->add_domain($domain);
   }
   $ttl = $zone->ttl() unless defined $ttl;
-  $domain->add_rr($node, $ttl, $type, $rdata, $comment, $dns);
+  $domain->add_rr($ttl, $type, $rdata, $comment, $dns, @nodeinfo);
 }
 
 =back
