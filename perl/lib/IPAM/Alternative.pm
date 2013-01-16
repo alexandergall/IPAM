@@ -3,7 +3,7 @@
 #### Description:   IPAM::Alternative class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Sep 10 2012
-#### RCS $Id$
+#### RCS $Id: Alternative.pm,v 1.1 2012/09/10 14:42:35 gall Exp gall $
 package IPAM::Alternative;
 our @ISA = qw(IPAM::Thing);
 
@@ -57,9 +57,28 @@ Maps a host to a L<IPAM::Thing>, which holds the name of a DNS alias
 
 =item IPAM::Alternative::MAP_RR
 
-Maps a host to a DNS resource record represented by a
-L<XML::LibXML::Node> element which represents a particular XML node of
-type C<< <rr> >> in the IPAM database.
+Maps a host to a DNS resource record represented by a hash with the
+following keys derived from the C<< <rr> >> element that defines the
+RR in the IPAM database
+
+=over 4
+
+=item type
+
+RR type
+
+=item ttl
+
+TTL of the RR
+
+=item rdata
+
+Contents of the RR
+
+=item nodeinfo
+
+A list containing the file name and line number where the C<< <rr> >>
+element is defined in the IPAM database.
 
 =back
 
