@@ -83,7 +83,7 @@ sub show_alt($) {
 		   info($host));
 	  } elsif ($type eq IPAM::Alternative::MAP_RR) {
 	      push(@args, 'Resource Record', $host->name(),
-		   $object->getAttribute('type'), info($host));
+		   $object->{type}, info($host));
 	  } else {
 	    die "BUG: unknonwn alternative type $type";
 	  }
