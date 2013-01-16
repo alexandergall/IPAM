@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.12 2012/09/28 09:59:03 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.13 2012/12/10 15:27:54 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -63,16 +63,17 @@ sub fqdn($) {
   return(join('.', $self->name(), $self->{zone}->name()));
 }
 
-=item C<add_rr($node, $ttl, $type, $rdata, $comment, $dns)>
+=item C<add_rr($ttl, $type, $rdata, $comment, $dns, @nodeinfo)>
 
-  eval { $domain->add_rr($node, $ttl, $type, $rdata, $comment, $dns) }
+  eval { $domain->add_rr($ttl, $type, $rdata, $comment, $dns) }
     or die $@;
 
 Adds the resource record C>> <$type, $rdata> >> with given C<$ttl> to
-the RRsets associated with the domain.  C<$node> is a
-L<XML::LibXML::Node> object from which the RR is derived.  The
-C<$comment> is included as actual comment in the output of the RR by
-the C<print()> method.
+the RRsets associated with the domain.  The C<$comment> is included as
+actual comment in the output of the RR by the C<print()> method.  The
+optional array C<@nodeinfo> is a list of filename and linenumber where
+the element of the IPAM database is defined from which the resource
+record was derived.
 
 If the record is of type CNAME, exceptions are raised if either a
 CNAME or a record of any other type already exists.
@@ -88,8 +89,8 @@ addition, none of the checks regarding CNAMEs and TTLs are performed.
 
 =cut
 
-sub add_rr($$$$$$$) {
-  my ($self, $node, $ttl, $type, $rdata, $comment, $dns) = @_;
+sub add_rr($$$$$$@) {
+  my ($self, $ttl, $type, $rdata, $comment, $dns, @nodeinfo) = @_;
   my $key = 'types';
   $type = uc($type);
   if ($dns) {
@@ -100,14 +101,13 @@ sub add_rr($$$$$$$) {
 	 .": mixing of CNAME with other record types not allowed\n";
     if ($self->exists_rrset($type)) {
       if ($type eq 'CNAME') {
-	my ($file, $line) =
-	  IPAM::_nodeinfo((@{$self->{types}{$type}{rr}})[0]->{node});
+	my ($file, $line) = (@{$self->{types}{$type}{rr}})[0]->{nodeinfo};
 	die $self->fqdn().": multiple CNAME records not allowed"
 	  ." (conflicts with definition at $file, $line)\n";
       }
       my $rrset_ttl = $self->{types}{$type}{ttl};
       unless ($rrset_ttl eq $ttl) {
-	my ($file, $line) = IPAM::_nodeinfo($node);
+	my ($file, $line) = @nodeinfo;
 	$rrset_ttl > $ttl and $self->{types}{$type}{ttl} = $ttl;
 	warn $self->fqdn().": TTL ".
 	  (defined $ttl ? $ttl : '<default>')." of new $type RR"
@@ -129,7 +129,7 @@ sub add_rr($$$$$$$) {
   push(@{$self->{$key}{$type}{rr}}, { rdata => $rdata,
 				      comment => $comment,
 				      dns => $dns,
-				      node => $node});
+				      nodeinfo => [ @nodeinfo ] });
 }
 
 =item C<print($FILEH, $indent, $annotate)>
@@ -169,7 +169,7 @@ sub print($$$$) {
 		      $rrset->{ttl}, $type, $rr->{rdata});
 	defined $rr->{comment} and print $FILE " ; ".$rr->{comment};
 	if (defined $annotate and $annotate) {
-	  my ($file, $line) = IPAM::_nodeinfo($rr->{node});
+	  my ($file, $line) = @{$rr->{nodeinfo}};
 	  defined $file and
 	    print $FILE (" ; $file:$line");
 	}
