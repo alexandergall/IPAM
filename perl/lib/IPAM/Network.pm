@@ -3,7 +3,7 @@
 #### Description:   IPAM::Network class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Network.pm,v 1.7 2012/09/10 14:42:02 gall Exp gall $
+#### RCS $Id: Network.pm,v 1.8 2012/09/13 07:00:10 gall Exp gall $
 
 package IPAM::Network;
 use IPAM::Thing;
@@ -51,7 +51,12 @@ checked to be in valid DNS master file syntax.
 sub new($$$) {
   my ($class, $node, $name, $location_node) = @_;
   my $self = $class->SUPER::new($node, $name);
-  $self->{location_node} = $location_node;
+  if (defined $location_node) {
+    $self->{location} = $location_node->textContent();
+    $self->{location_nodeinfo} = [ IPAM::_nodeinfo($location_node) ];
+  } else {
+    $self->{location} = undef;
+  }
   $self->{prefix_r} = IPAM::Prefix::Registry->new();
   $self->{host_r} = IPAM::Host::Registry->new();
   return($self);
@@ -72,23 +77,21 @@ object that was passed to the C<new()> method.
 
 sub location($) {
   my ($self) = @_;
-  defined $self->{location_node} and
-    return($self->{location_node}->textContent());
-  return(undef);
+  return($self->{location});
 }
 
-=item C<location_node()>
+=item C<location_nodeinfo()>
 
-  my $loc_node = $net->location_node();
+  my ($file, $line) = $net->location_nodeinfo();
 
-Returns the L<XML::LibXML::Node> object which was passed to the
-C<new()> method.
+Returns the file name and line number of the XML element in the IPAM
+database from which the location information was derived.
 
 =cut
 
-sub location_node($) {
+sub location_nodeinfo($) {
   my ($self) = @_;
-  return($self->{location_node});
+  return(@{$self->{location_nodeinfo}});
 }
 
 =item C<add_prefix($prefix)>
