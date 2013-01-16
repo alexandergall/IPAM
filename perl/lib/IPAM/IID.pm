@@ -3,7 +3,7 @@
 #### Description:   IPAM::IID class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: IID.pm,v 1.4 2012/08/23 15:22:35 gall Exp gall $
+#### RCS $Id: IID.pm,v 1.5 2012/09/04 13:35:42 gall Exp gall $
 
 package IPAM::IID;
 our @ISA = qw(IPAM::Thing);
@@ -159,7 +159,7 @@ sub add($$$) {
   my $next_iid = $self->iterator();
   while (my $iid = $next_iid->()) {
     if ($id_new eq $iid->ip()->addr()) {
-      my ($file, $line) = IPAM::_nodeinfo($iid->node());
+      my ($file, $line) = $iid->nodeinfo();
       die "$self->{name}: Duplicate definition of $id_new "
 	."(previous definition at $file, $line)\n";
     }
