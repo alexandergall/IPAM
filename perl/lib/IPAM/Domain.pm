@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.13 2012/12/10 15:27:54 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.14 2013/01/16 15:12:56 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -150,7 +150,7 @@ sub print($$$$) {
   my $name = $self->name() ? $self->name() : '@';
   my $indent = (defined $n and $n =~ /^\d+$/) ? ' 'x$n : '';
   foreach my $key (qw/types types_i/) {
-    foreach my $type (keys(%{$self->{$key}})) {
+    foreach my $type (sort { $a cmp $b } keys(%{$self->{$key}})) {
       my $rrset = \%{$self->{$key}{$type}};
       my $ttl = defined $rrset->{ttl} ? $rrset->{ttl} : '';
       my %rdata;
