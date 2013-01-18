@@ -4,7 +4,7 @@
 #### Description:   Extract router/interface for subnets in the IPAM
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jan 10 2013
-#### RCS $Id: ipam-router-info,v 1.3 2013/01/11 11:29:40 gall Exp gall $
+#### RCS $Id: ipam-router-info,v 1.4 2013/01/11 11:41:01 gall Exp gall $
 ####
 ####
 #### This command works as a filter for the output of "getciscoaddr
@@ -53,11 +53,8 @@ exit(1);
 }
 
 @ARGV or usage();
-my $file = "$base_dir/ipam.xml";
-system("cd $base_dir && make --silent validate") == 0 or die;
-my $ipam = IPAM->new({ verbose => undef, base_dir => $base_dir,
-		       validate => undef, warnings => undef});
-$ipam->load($file);
+system("cd $base_dir && make --silent .ipam.cache") == 0 or die;
+my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 
 while (<STDIN>) {
   my ($router, $interface, $prefix, $address, $description) = split('%');

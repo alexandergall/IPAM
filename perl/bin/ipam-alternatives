@@ -28,11 +28,8 @@ EOF
 
 GetOptions(\%opt, 'detail')
   or usage();
-my $file = "$base_dir/ipam.xml";
-system("cd $base_dir && make --silent validate") == 0 or die;
-my $ipam = IPAM->new({ verbose => undef, base_dir => $base_dir,
-		       validate => undef, warnings => undef });
-$ipam->load($file);
+system("cd $base_dir && make --silent .ipam.cache") == 0 or die;
+my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 if (@ARGV) {
   foreach my $arg (@ARGV) {
     unless (my $alt = $ipam->registry(IPAM::REG_ALTERNATIVE)->lookup($arg)) {

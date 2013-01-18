@@ -27,11 +27,8 @@ exit(1);
 
 GetOptions(\%opt, 'conf', 'annotate') or usage();
 ($opt{conf} and @ARGV != 0) and usage();
-my $file = "$base_dir/ipam.xml";
-system("cd $base_dir && make --silent validate") == 0 or die;
-my $ipam = IPAM->new({ verbose => undef, base_dir => $base_dir,
-		       validate => undef});
-$ipam->load($file);
+system("cd $base_dir && make --silent .ipam.cache") == 0 or die;
+my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 
 if ($opt{conf}) {
   foreach my $zone ($ipam->registry(IPAM::REG_ZONE)->things()) {
@@ -52,7 +49,7 @@ if (@ARGV) {
   @zones = $zone_r->things();
 }
 foreach my $zone (@zones) {
-  $file = join('/', $zones_dir, $zone->name());
+  my $file = join('/', $zones_dir, $zone->name());
   print "Generating ".$zone->name();
   $zone->directory() eq 'IGNORE' and print " (will not be installed).";
   print "\n";

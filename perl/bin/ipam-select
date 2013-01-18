@@ -4,7 +4,7 @@
 #### Description:   Select objects based on type and tag
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jan 10 2013
-#### RCS $Id: ipam-select,v 1.1 2013/01/10 11:01:45 gall Exp gall $
+#### RCS $Id: ipam-select,v 1.2 2013/01/10 15:24:58 gall Exp gall $
 ####
 
 ## Local Variables:
@@ -41,11 +41,8 @@ exit(1);
 GetOptions(\%opt, 'tag=s@', 'type=s', 'detail') or usage();
 grep /^$opt{type}$/, @types or usage();
 
-my $file = "$base_dir/ipam.xml";
-system("cd $base_dir && make --silent validate") == 0 or die;
-my $ipam = IPAM->new({ verbose => undef, base_dir => $base_dir,
-		       validate => undef, warnings => undef});
-$ipam->load($file);
+system("cd $base_dir && make --silent .ipam.cache") == 0 or die;
+my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 
 if (grep /^$opt{type}$/, qw/block net/) {
   walk_registry($ipam->address_map()->registry());
