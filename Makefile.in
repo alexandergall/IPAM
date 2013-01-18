@@ -5,8 +5,9 @@ PATH = /bin:/usr/bin:$(IPAM_BASE)/bin
 JING = java -Dorg.apache.xerces.xni.parser.XMLParserConfiguration=org.apache.xerces.parsers.XIncludeParserConfiguration -jar /usr/share/java/jing.jar
 FIND = find
 GEN-ZONES = ipam-gen-zones
+SERIALIZE = ipam-create-cache
+DUMP = xmllint --xinclude
 DIFF = diff
-RM = rm
 
 .DEFAULT_GOAL = zones
 
@@ -16,8 +17,31 @@ RM = rm
 ### For now, we perform validation outside of the IPAM Perl module using
 ### jing.
 validate: ipam.xml alternatives.xml address-map.xml iid.xml zones.xml $(wildcard networks/*.xml net-*/networks/*.xml)
+	@echo "<Validating database>" 1>&2
 	@$(JING) -c schemas/ipam.rnc ipam.xml
 	@umask 002; touch $@
+
+dump: validate
+	$(DUMP) ipam.xml
+
+cache: .ipam.cache
+
+.ipam.cache: validate
+	@umask 002; \
+	set -e; \
+	echo "<Rebuilding cache file $(CURDIR)/$@>" 1>&2; \
+	[ -f $@.lock ] && \
+	  { user=`ls -l $@.lock | awk '{print $$3}'`; \
+	    echo "Cache is being rebuilt by user $$user, retry later"; \
+	    exit 1; }; \
+	cleanup() { \
+		trap - INT TERM EXIT; \
+		rm -f $@.lock; \
+	}; \
+	trap cleanup INT TERM EXIT; \
+	touch $@.lock; \
+	$(SERIALIZE) $@; \
+	rm -f $@.lock
 
 ### Show the differences of all currently checked-out files which have
 ### been modified since the last successful validation.
@@ -56,7 +80,7 @@ zones: validate zones/.links.stamp
 zones/.links.stamp: zones.xml
 	@umask 002; \
 	set -e; \
-	$(RM) -f zones/*; \
+	rm -f zones/*; \
 	$(GEN-ZONES) --conf | while read zone dir; do \
 		ln -s $$dir/d.ipam zones/$${zone}install; \
 	done; \
