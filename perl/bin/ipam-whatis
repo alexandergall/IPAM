@@ -22,7 +22,7 @@ my (%visited_fqdns, %visited_prefixes, %visited_hosts);
 
 sub usage() {
   print <<"EOF";
-usage: $0 [--default-domain=<domain>] [--detail] [--warnings] [--no-stub-recurse] [--recurse=<level>] <fqdn> | <address> | <prefix> ...
+usage: $0 [--default-domain=<domain>] [--detail] [--no-stub-recurse] [--recurse=<level>] <fqdn> | <address> | <prefix> ...
 EOF
 exit(1);
 }
@@ -33,18 +33,15 @@ sub indent($$);
 sub detail($$);
 sub print_pf_registry($$$);
 
-GetOptions(\%opt, "default-domain=s", "detail", "recurse=i", 'warnings', 'no-stub-recurse')
-  or usage();
+GetOptions(\%opt, "default-domain=s", "detail", "recurse=i",
+	   'no-stub-recurse') or usage();
 @ARGV >= 1 or usage();
 $opt{recurse}++;
 $opt{recurse} < 0 and $opt{recurse} = 0;
 $opt{'default-domain'} =~ /\.$/ or 
   die "The default domain must end with a dot.\n";
-my $file = "$base_dir/ipam.xml";
-system("cd $base_dir && make --silent validate") == 0 or die;
-my $ipam = IPAM->new({ verbose => undef, base_dir => $base_dir,
-		       validate => undef, warnings => $opt{warnings}});
-$ipam->load($file);
+system("cd $base_dir && make --silent .ipam.cache") == 0 or die;
+my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 
 foreach my $item (@ARGV) {
   if ($item =~ /(\d+\.\d+\.\d+\.\d+|:|\/)/) {
