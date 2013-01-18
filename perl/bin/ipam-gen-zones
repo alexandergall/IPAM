@@ -19,14 +19,15 @@ my $zones_dir = "$base_dir/zones";
 
 sub usage() {
   print <<"EOF";
-usage: $0 [--annotate] [zone] ...
+usage: $0 [--annotate] [--dir=directory] [zone] ...
        $0 --conf
 EOF
 exit(1);
 }
 
-GetOptions(\%opt, 'conf', 'annotate') or usage();
+GetOptions(\%opt, 'conf', 'annotate', 'dir=s') or usage();
 ($opt{conf} and @ARGV != 0) and usage();
+$opt{dir} and $zones_dir = $opt{dir};
 system("cd $base_dir && make --silent .ipam.cache") == 0 or die;
 my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 
