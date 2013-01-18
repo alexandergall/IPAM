@@ -1,0 +1,37 @@
+#!/usr/bin/perl
+
+my $base_dir;
+BEGIN {
+  $base_dir = '/home/noc/IPAM';
+  if (exists $ENV{IPAM_BASE}) {
+    $base_dir = $ENV{IPAM_BASE};
+  }
+}
+use strict;
+use warnings;
+use lib "$base_dir/lib/perl5";
+use IPAM 0.01;
+use Getopt::Long;
+
+my %opt;
+sub usage() {
+  print <<"EOF";
+usage: $0 [--warnings] [--verbose] <cache_file>
+EOF
+exit(1);
+}
+
+GetOptions(\%opt, 'warnings', 'verbose') or usage();
+@ARGV == 1 or usage();
+my $file = "$base_dir/ipam.xml";
+my $cache_file = $ARGV[0] =~ m%^/% ? $ARGV[0] :
+  "$base_dir/$ARGV[0]";
+system("cd $base_dir && make --silent validate") == 0 or die;
+my $ipam = IPAM->new({ verbose => $opt{verbose}, base_dir => $base_dir,
+		       validate => undef, warnings => $opt{warnings} });
+$ipam->load($file);
+$ipam->cache($cache_file);
+
+## Local Variables:
+## mode: CPerl
+## End:
