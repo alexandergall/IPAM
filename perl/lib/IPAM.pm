@@ -188,8 +188,6 @@ my %serializer_opts = ( serializer => 'Storable', encoding => 'hex' );
 
 Create an instance of a IPAM object.
 
-=back
-
 =cut
 
 sub new() {
@@ -204,12 +202,25 @@ sub new() {
   return(bless($self, $class));
 }
 
-sub deserialize($$) {
+=item C<new_from_cache($cache_file)>
+
+  my $ipam = IPAM->new_from_cache($cache_file);
+
+Create an instance of a IPAM object from a cache file that has been
+created by the C<cache()> instance method.
+
+=cut
+
+sub new_from_cache($$) {
   my ($class, $file) = @_;
+  my $ipam;
   my $serializer = Data::Serializer->new(%serializer_opts);
-  my $ipam = $serializer->retrieve($file);
+  eval { $ipam = $serializer->retrieve($file) }
+    or die "Loading database from cache file $file failed: $@";
   return($ipam);
 }
+
+=back
 
 =head1 INSTANCE METHODS
 
@@ -406,17 +417,21 @@ sub _ttl($$) {
   return(_attr_with_default($node, 'ttl', $ttl));
 }
 
-=item C<serialize($file)>
+=item C<cache($file)>
 
-  $ipam->serialize($file) or die;
+  $ipam->cache($file);
+
+Serialize the IPAM object to the given file.  This file can be passed
+to the C<new_from_cache()> class method to reconstruct the database
+without having to call the C<load()> method.
 
 =cut
 
-sub serialize($$) {
+sub cache($$) {
   my ($self, $file) = @_;
   my $serializer = Data::Serializer->new(%serializer_opts);
-  #IPAM::Thing->_delete_nodes();
-  $serializer->store($self, $file) or die;
+  eval { $serializer->store($self, $file) } or
+    die "Creation of cache file $file failed: $@";
 }
 
 ####
