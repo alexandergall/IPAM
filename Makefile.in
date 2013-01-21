@@ -40,8 +40,8 @@ cache: .ipam.cache
 	}; \
 	trap cleanup INT TERM EXIT; \
 	touch $@.lock; \
-	$(SERIALIZE) $@; \
-	chmod g+rw $@
+	touch $@; \
+	$(SERIALIZE) $@
 
 ### Show the differences of all currently checked-out files which have
 ### been modified since the last successful validation.
