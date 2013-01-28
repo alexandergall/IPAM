@@ -3,7 +3,7 @@
 #### Description:   IPAM::Network class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Network.pm,v 1.8 2012/09/13 07:00:10 gall Exp gall $
+#### RCS $Id: Network.pm,v 1.9 2013/01/16 15:11:04 gall Exp gall $
 
 package IPAM::Network;
 use IPAM::Thing;
@@ -208,17 +208,19 @@ sub find_host($$) {
   return($self->{host_r}->lookup($fqdn));
 }
 
-=item C<hosts()>
+=item C<hosts($sorter)>
 
   my @hosts = $net->hosts();
 
 Returns a list of objects in the network's L<IPAM::Host::Registry>.
+The list can be sorted by passing an anonymous subroutine C<$sorter>
+as documented in the C<things()> instance method of L<IPAM::Registry>.
 
 =cut
 
-sub hosts($) {
-  my ($self) = @_;
-  return($self->{host_r}->things());
+sub hosts($$) {
+  my ($self, $sorter) = @_;
+  return($self->{host_r}->things($sorter));
 }
 
 =item C<host_registry()>
