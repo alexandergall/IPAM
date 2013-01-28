@@ -71,9 +71,10 @@ sub name_info($$) {
       indent($indent, "Is a subnet.\n");
       if ($opt{detail}) {
 	detail($network, $indent+1);
-	if (my @hosts = $network->hosts()) {
+	if (my @hosts = $network->hosts(sub {
+					  $_[0]->name() cmp $_[1]->name() })) {
 	  indent($indent+1, "It contains the hosts\n");
-	  foreach my $host (sort(@hosts)) {
+	  foreach my $host (@hosts) {
 	    indent($indent+2, $host->name()."\n");
 	    $opt{recurse} and name_info($host->name(), $indent+3);
 	  }
