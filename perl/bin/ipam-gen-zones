@@ -49,7 +49,7 @@ if (@ARGV) {
 } else {
   @zones = $zone_r->things();
 }
-foreach my $zone (@zones) {
+foreach my $zone (sort { $a->name() cmp $b->name() } @zones) {
   my $file = join('/', $zones_dir, $zone->name().$opt{suffix});
   print "Generating ".$zone->name();
   $zone->directory() eq 'IGNORE' and print " (will not be installed).";
