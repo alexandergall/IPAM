@@ -58,17 +58,24 @@ diff:
 zones: validate zones/.links.stamp
 	@umask 002; \
 	set -e; \
-	$(GEN-ZONES); \
+	cleanup() { \
+		trap - INT TERM EXIT; \
+		rm -f zones/*new; \
+	}; \
+	trap cleanup INT TERM EXIT; \
+	$(GEN-ZONES) --suffix=new; \
 	for file in zones/*; do \
-		[ -f $$file ] || continue; \
+		[ -f $$file -a -f $${file}new ] || continue; \
 		[ -h $${file}install ] || continue; \
 		dest=`readlink $${file}install`; \
 		[ -f $$dest ] || touch $$dest; \
-		if ! $(DIFF) $$file $${file}install >/dev/null; then \
+		if ! $(DIFF) $$file $${file}new >/dev/null; then \
+			mv $${file}new $$file; \
 			rm -f $$dest.old; \
 			mv $$dest $$dest.old; \
 			cp $$file $$dest; \
-			(cd `dirname $$dest` && make); \
+			dir=`dirname $$dest`; \
+			[ -f $$dir/Makefile ] && (cd $$dir && make); \
 		else \
 			echo No changes in `basename $$file`; \
 		fi; \
