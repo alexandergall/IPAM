@@ -21,12 +21,12 @@ sub show_alt($);
 
 sub usage() {
   print <<"EOF";
-usage: $0
+usage: $0 [--detail] [--by-name] [<alternative> ...]
 EOF
   exit(1);
 }
 
-GetOptions(\%opt, 'detail')
+GetOptions(\%opt, 'detail', 'by-name')
   or usage();
 system("cd $base_dir && make --silent .ipam.cache") == 0 or die;
 my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
@@ -48,46 +48,92 @@ if (@ARGV) {
 
 sub show_alt($) {
   my ($alt) = @_;
- indent(0, "\nAlternative \"".$alt->name."\":\n");
+  my (%by_state, %by_name);
+  my @types = ( IPAM::Alternative::MAP_ALIAS,
+		IPAM::Alternative::MAP_ADDRESS,
+		IPAM::Alternative::MAP_RR );
+  indent(0, "\nAlternative \"".$alt->name."\":\n");
   my @states = $alt->allowed_states();
   my $state = $alt->state();
   indent(1, "Allowed states: ".join(', ', @states)."\n");
   indent(1, "Active state  : $state\n");
   indent(1, "TTL override  : ".(defined $alt->ttl() ? $alt->ttl() : '<none>')
 	 ."\n");
+
+  ### Collect information by state and name
   foreach my $state (@states) {
-    my %hosts;
-    indent(1,"Mappings for state \"$state\":\n");
     foreach my $ref ($alt->mappings($state)) {
-      foreach my $type (IPAM::Alternative::MAP_ALIAS,
-			IPAM::Alternative::MAP_ADDRESS,
-			IPAM::Alternative::MAP_RR) {
+      foreach my $type (@types) {
 	next unless exists $ref->{$type};
+	push(@{$by_state{$state}{$type}}, @{$ref->{$type}});
+	foreach my $mapping (@{$ref->{$type}}) {
+	  my $name;
+	  if ($type eq IPAM::Alternative::MAP_ALIAS) {
+	    $name = @$mapping[1]->name();
+	  } else {
+	    $name = @$mapping[0]->name();
+	  }
+	  push(@{$by_name{$name}{$state}{$type}}, [@$mapping]);
+	}
+      }
+    }
+  }
+
+  if ($opt{'by-name'}) {
+    indent(1,"Mappings by name and state:\n");
+    foreach my $name (sort(keys(%by_name))) {
+      indent(2,"$name\n");
+      foreach my $state (@states) {
+	next unless exists $by_name{$name}{$state};
+	foreach my $type (@types) {
+	  next unless exists $by_name{$name}{$state}{$type};
+	  foreach my $mapping (@{$by_name{$name}{$state}{$type}}) {
+	    my ($host, $object) = @$mapping;
+	    my @args;
+	    if ($type eq IPAM::Alternative::MAP_ALIAS) {
+	      push(@args, 'Alias', $host->name(), info($object));
+	    } elsif ($type eq IPAM::Alternative::MAP_ADDRESS) {
+	      push(@args, 'Address', $object->name(), info($host));
+	    } elsif ($type eq IPAM::Alternative::MAP_RR) {
+	      push(@args, 'Resource Record', $object->{type}, info($host));
+	    } else {
+		die "BUG: unknonwn alternative type $type";
+	      }
+	    indent(3, sprintf("%-12s: %s %-35s %s\n", $state, @args));
+	  }
+	}
+      }
+    }
+  } else {
+    foreach my $state (@states) {
+      indent(1,"Mappings for state \"$state\":\n");
+      foreach my $type (@types) {
+	next unless exists $by_state{$state}{$type};
 	### Sort by hostname, except for type alias, which is sorted
 	### by the name of the alias.
 	my $sub = sub { @$a[0]->name() cmp @$b[0]->name() };
 	if ($type eq IPAM::Alternative::MAP_ALIAS) {
 	  $sub = sub { @$a[1]->name() cmp @$b[1]->name() };
 	}
-	foreach my $mapping (sort $sub @{$ref->{$type}}) {
+	foreach my $mapping (sort $sub @{$by_state{$state}{$type}}) {
 	  my ($host, $object) = @$mapping;
 	  my @args;
-	  if ($type eq IPAM::Alternative::MAP_ADDRESS) {
-	      push(@args, 'Address', $host->name(), $object->name(),
-		   info($host));
-	  } elsif ($type eq IPAM::Alternative::MAP_ALIAS) {
-	      push(@args, 'Alias  ', $object->name(), $host->name(),
-		   info($host));
+	  if ($type eq IPAM::Alternative::MAP_ALIAS) {
+	    push(@args, 'Alias  ', $object->name(), $host->name(),
+		 info($object));
+	  } elsif ($type eq IPAM::Alternative::MAP_ADDRESS) {
+	    push(@args, 'Address', $host->name(), $object->name(),
+		 info($host));
 	  } elsif ($type eq IPAM::Alternative::MAP_RR) {
-	      push(@args, 'Resource Record', $host->name(),
-		   $object->{type}, info($host));
+	    push(@args, 'Resource Record', $host->name(),
+		 $object->{type}, info($host));
 	  } else {
 	    die "BUG: unknonwn alternative type $type";
 	  }
 	  indent(3, sprintf("%s: %-35s %-35s %s\n", @args));
 	}
       }
-    }
+      }
   }
 }
 
