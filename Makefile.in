@@ -31,7 +31,7 @@ cache: .ipam.cache
 	set -e; \
 	echo "<Rebuilding cache file $(CURDIR)/$@>" 1>&2; \
 	[ -f $@.lock ] && \
-	  { user=`ls -l $@.lock | awk '{print $$3}'`; \
+	  { user=`stat --format="%U" $@.lock`; \
 	    echo "Cache is being rebuilt by user $$user, retry later"; \
 	    exit 1; }; \
 	cleanup() { \
@@ -40,8 +40,10 @@ cache: .ipam.cache
 	}; \
 	trap cleanup INT TERM EXIT; \
 	touch $@.lock; \
-	touch $@; \
-	$(SERIALIZE) $@
+	$(SERIALIZE) $@; \
+	if [ `stat --format="%a" $@` != 664 ]; then \
+		chmod 664 $@; \
+	fi
 
 ### Show the differences of all currently checked-out files which have
 ### been modified since the last successful validation.
