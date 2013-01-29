@@ -19,7 +19,7 @@ DIFF = diff
 validate: ipam.xml alternatives.xml address-map.xml iid.xml zones.xml $(wildcard networks/*.xml net-*/networks/*.xml)
 	@echo "<Validating database>" 1>&2
 	@$(JING) -c schemas/ipam.rnc ipam.xml
-	@umask 002; touch $@
+	@umask 002; echo `id -u -n` > $@
 
 dump: validate
 	$(DUMP) ipam.xml
