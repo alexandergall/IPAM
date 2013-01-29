@@ -19,13 +19,13 @@ my $zones_dir = "$base_dir/zones";
 
 sub usage() {
   print <<"EOF";
-usage: $0 [--annotate] [--dir=directory] [zone] ...
+usage: $0 [--annotate] [--dir=directory] [--suffix=<suffix>] [zone] ...
        $0 --conf
 EOF
 exit(1);
 }
 
-GetOptions(\%opt, 'conf', 'annotate', 'dir=s') or usage();
+GetOptions(\%opt, 'conf', 'annotate', 'dir=s', 'suffix=s') or usage();
 ($opt{conf} and @ARGV != 0) and usage();
 $opt{dir} and $zones_dir = $opt{dir};
 system("cd $base_dir && make --silent .ipam.cache") == 0 or die;
@@ -50,7 +50,7 @@ if (@ARGV) {
   @zones = $zone_r->things();
 }
 foreach my $zone (@zones) {
-  my $file = join('/', $zones_dir, $zone->name());
+  my $file = join('/', $zones_dir, $zone->name().$opt{suffix});
   print "Generating ".$zone->name();
   $zone->directory() eq 'IGNORE' and print " (will not be installed).";
   print "\n";
