@@ -13,7 +13,7 @@ use lib "$base_dir/lib/perl5";
 use IPAM 0.01;
 use Getopt::Long;
 
-my %opt = ();
+my %opt = ( 'default-domain' => 'switch.ch.');
 my $indent_unit = 2;
 
 sub indent($$);
@@ -21,16 +21,22 @@ sub show_alt($);
 
 sub usage() {
   print <<"EOF";
-usage: $0 [--detail] [--by-name] [<alternative> ...]
+usage: $0 [--default-domain=<domain>] [--detail] [--by-name] [<alternative> ...]
+usage: $0 [--default-domain=<domain>] [--detail] --query <name> ...
 EOF
   exit(1);
 }
 
-GetOptions(\%opt, 'detail', 'by-name')
+GetOptions(\%opt, 'default-domain=s', 'detail', 'by-name', 'query')
   or usage();
+$opt{'default-domain'} =~ /\.$/ or 
+  die "The default domain must end with a dot.\n";
+$opt{query} and (@ARGV or usage());
 system("cd $base_dir && make --silent .ipam.cache") == 0 or die;
 my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
-if (@ARGV) {
+if ($opt{query}) {
+  map { show_fqdn($_) } @ARGV;
+} elsif (@ARGV) {
   foreach my $arg (@ARGV) {
     unless (my $alt = $ipam->registry(IPAM::REG_ALTERNATIVE)->lookup($arg)) {
       print STDERR "Unknown alternative \"$arg\".\n";
@@ -44,6 +50,59 @@ if (@ARGV) {
   }
 } else {
   map { show_alt($_) } $ipam->registry(IPAM::REG_ALTERNATIVE)->things();
+}
+
+sub show_fqdn($) {
+  my ($fqdn) = @_;
+  unless ($fqdn =~ /\.$/) {
+    $fqdn .= '.';
+    unless ($fqdn =~ /\.$opt{'default-domain'}$/) {
+      $fqdn .= $opt{'default-domain'};
+    }
+  }
+  if (my @hosts = $ipam->registry(IPAM::REG_NETWORK)->find_host($fqdn)) {
+    foreach my $host (@hosts) {
+      indent(0, "Alternatives for host ".$host->name().
+	     " in network ".$host->network()->name()."\n");
+      foreach my $result
+	($ipam->registry(IPAM::REG_ALTERNATIVE)->find_host($host)) {
+	my ($alt, $ref) = @$result;
+	foreach my $state (keys(%{$ref})) {
+	  foreach my $type (keys(%{$ref->{$state}})) {
+	    foreach my $object (@{$ref->{$state}{$type}}) {
+	      my @args;
+	      if ($type eq IPAM::Alternative::MAP_ALIAS) {
+		push(@args, 'Alias', $object->name(), info($object));
+	      } elsif ($type eq IPAM::Alternative::MAP_ADDRESS) {
+		push(@args, 'Address', $object->name(), info($host));
+	      } elsif ($type eq IPAM::Alternative::MAP_RR) {
+		push(@args, 'Resource Record', $object->{type}, info($host));
+	      }
+	      indent(1, sprintf("%s%-15s %s: %-35s %s\n",
+				$alt->check_state($state) ? '*' : ' ',
+				$alt->name().':'.$state, @args));
+	    }
+	  }
+	}
+      }
+    }
+  } elsif (my @mappings =
+	   $ipam->registry(IPAM::REG_ALTERNATIVE)->find_alias($fqdn)) {
+    foreach my $mapping (@mappings) {
+      my ($alt, $ref) = @$mapping;
+      indent(0, "Alternatives for alias $fqdn\n");
+      foreach my $state (keys(%{$ref})) {
+	map { indent(1, sprintf("%s%-15s Canonical name: %-35s %s\n",
+				$alt->check_state($state) ? '*' : ' ',
+				$alt->name().':'.$state, @$_[0]->name(),
+				info(@$_[1]))) }
+	  @{$ref->{$state}};
+      }
+    }
+  } else {
+    print STDERR "The name $fqdn has no alternatives.\n";
+    exit(1);
+  }
 }
 
 sub show_alt($) {
