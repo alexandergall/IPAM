@@ -56,7 +56,7 @@ sub show_fqdn($) {
   my ($fqdn) = @_;
   unless ($fqdn =~ /\.$/) {
     $fqdn .= '.';
-    unless ($fqdn =~ /\.$opt{'default-domain'}$/) {
+    unless ($fqdn =~ /(\.|^)$opt{'default-domain'}$/) {
       $fqdn .= $opt{'default-domain'};
     }
   }
