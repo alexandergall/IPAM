@@ -3,7 +3,7 @@
 #### Description:   IPAM::Alternative class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Sep 10 2012
-#### RCS $Id: Alternative.pm,v 1.1 2012/09/10 14:42:35 gall Exp gall $
+#### RCS $Id: Alternative.pm,v 1.2 2013/01/16 15:21:49 gall Exp gall $
 package IPAM::Alternative;
 our @ISA = qw(IPAM::Thing);
 
@@ -235,6 +235,78 @@ sub find_mapping($$$) {
   return(undef);
 }
 
+=item C<find_host($host)>
+
+  if (my $ref = $alt->find_host($host)) {
+    foreach my $state (keys(%{$ref})) {
+      map { print $host->name()." state $state type $_\n" }
+        @{$ref->{$state}};
+    }
+  } else {
+    print "No mapping for ".$host->name()." in ".$alt->name()."\n";
+  }
+
+Searches the alternative C<$alt> for mappings for the L<IPAM::Host>
+object $host and returns a reference to a hash keyed by the name of
+the states for which such mappings exist.  The values are themselves
+hashes keyed by the type of mapping that contain a list of the
+corresponding objects.
+
+The undef value is returned if no mappings exist.
+
+=cut
+
+sub find_host($$) {
+  my ($self, $host) = @_;
+  my $result = {};
+  foreach my $state (keys(%{$self->{states}})) {
+    foreach my $type (keys(%{$self->{states}{$state}})) {
+      map { @$_[0] eq $host and push(@{$result->{$state}{$type}}, @$_[1]) }
+	@{$self->{states}{$state}{$type}};
+    }
+  }
+  keys(%{$result}) and return($result);
+  return(undef);
+}
+
+=item C<find_alias($fqdn)>
+
+  if (my $ref = $alt->find_alias($fqdn)) {
+    foreach my $state (keys(%{$ref})) {
+      map { print "Canonical name for $fqdn in state $state: "
+             .@$_[0]->name()."\n";
+        @{$ref->{$state}};
+    }
+  } else {
+    print "No alias mapping for $fqdn in ".$alt->name()."\n";
+  }
+
+Searches the alternative C<$alt> for mappings of type MAP_ALIAS that
+match the FQDN $fqdn and returns a reference to a hash keyed by the
+name of the states for which such mappings exist.  Each value is a
+list that contains both elements of the mapping, i.e. a L<IPAM::Host>
+objects that defines the canonical name of the alias and a
+L<IPAM::Thing> object that describes the alias itself.  While multiple
+such mappings can exist, at most one of them can be active at any time
+due to the singleton nature of DNS CNAME records.
+
+The undef value is returned if no mappings exist.
+
+=cut
+
+sub find_alias($$) {
+  my ($self, $fqdn) = @_;
+  my $result = {};
+  foreach my $state (keys(%{$self->{states}})) {
+    next unless exists $self->{states}{$state}{IPAM::Alternative::MAP_ALIAS};
+    map { lc(@$_[1]->name()) eq lc($fqdn) and
+	    push(@{$result->{$state}}, [@$_]) }
+      @{$self->{states}{$state}{IPAM::Alternative::MAP_ALIAS}};
+  }
+  keys(%{$result}) and return($result);
+  return(undef);
+}
+
 =item C<mappings($state)>
 
   my $ref = $alt->mappings('foo');
@@ -315,4 +387,55 @@ sub find_mapping($$$$) {
   return();
 }
 
+=item C<find_host($host)>
+
+  foreach ($alt_r->find_host($host)) {
+    my ($alt, $ref) = @$_;
+    print "Alternative ".$alt->name().":\n";
+    map { print "\tState $_\n" } keys(%$ref);
+  }
+
+Calls the C<find_host()> instance method of each registered
+alternative and returns an array of lists containing a reference to
+the L<IPAM::Alternative> object and the result of the C<find_host()>
+method call for each alternative that contains a mapping for the
+L<IPAM::Host> object C<$host>.
+
+=cut
+
+sub find_host($$) {
+  my ($self, $host) = @_;
+  my @result;
+  foreach my $alt ($self->things()) {
+    next unless my $ref = $alt->find_host($host);
+    push(@result, [$alt, $ref]);
+  }
+  return(@result);
+}
+
+=item C<find_alias($fqdn)>
+
+  foreach ($alt_r->find_alias($fqdn)) {
+    my ($alt, $ref) = @$_;
+    print "Alternative ".$alt->name().":\n";
+    map { print "\tState $_\n" } keys(%$ref);
+  }
+
+Calls the C<find_alias()> instance method of each registered
+alternative and returns an array of lists containing a reference to
+the L<IPAM::Alternative> object and the result of the C<find_alias()>
+method call for each alternative that contains a mapping for the
+FQDN $host.
+
+=cut
+
+sub find_alias($$) {
+  my ($self, $fqdn) = @_;
+  my @result;
+  foreach my $alt ($self->things()) {
+    next unless my $ref = $alt->find_alias($fqdn);
+    push(@result, [$alt, $ref]);
+  }
+  return(@result);
+}
 1;
