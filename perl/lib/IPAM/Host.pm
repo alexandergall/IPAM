@@ -3,7 +3,7 @@
 #### Description:   IPAM::Host class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Host.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
+#### RCS $Id: Host.pm,v 1.2 2012/07/13 15:20:57 gall Exp gall $
 
 package IPAM::Host;
 use IPAM::Thing;
@@ -154,17 +154,19 @@ sub add_alias($$) {
   $self->{alias_r}->add($alias);
 }
 
-=item aliases()
+=item aliases($sorter)
 
 my @aliases = $host->aliases();
 
-Returns the list of L<IPAM::Thing> objects in the host's "alias" registry.
+Returns the list of L<IPAM::Thing> objects in the host's "alias"
+registry.  An optional anonymous subroutine C<$sorter> will be passed
+to the C<things()> method of the alias registry.
 
 =cut
 
-sub aliases($) {
-  my ($self) = @_;
-  return($self->{alias_r}->things());
+sub aliases($$) {
+  my ($self, $sorter) = @_;
+  return($self->{alias_r}->things($sorter));
 }
 
 =item alias_registry()
