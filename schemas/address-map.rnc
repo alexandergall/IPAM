@@ -3,13 +3,18 @@
 # ## Description:   RelaxNG schema for the IPAM <address-map> element
 # ## Author:        Alexander Gall <gall@switch.ch>
 # ## Created:       Sep 4 2012
-# ## RCS $Id: address-map.rnc,v 1.9 2013/01/08 16:16:36 gall Exp gall $
+# ## RCS $Id: address-map.rnc,v 1.10 2013/01/09 11:17:21 gall Exp gall $
 # ##
+namespace xi = "http://www.w3.org/2001/XInclude"
+
 start = address-map
 
 address-map = element address-map {
    attribute xml:base { text }?,
-   block*
+   (block* & element xi:include {
+      attribute href { text },
+      empty
+   }*)
 }
 
 include "block.rnc" {
