@@ -4,7 +4,7 @@
 #### Description:   Extract router/interface for subnets in the IPAM
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jan 10 2013
-#### RCS $Id: ipam-router-info,v 1.4 2013/01/11 11:41:01 gall Exp gall $
+#### RCS $Id: ipam-router-info,v 1.5 2013/01/18 13:17:55 gall Exp gall $
 ####
 ####
 #### This command works as a filter for the output of "getciscoaddr
@@ -42,6 +42,7 @@ use Getopt::Long;
 my %networks;
 my $indent_unit = 2;
 
+my %opt = ( 'default-domain' => 'switch.ch.');
 sub router_info($$);
 sub indent($$);
 
@@ -52,6 +53,9 @@ EOF
 exit(1);
 }
 
+GetOptions(\%opt, 'default-domain=s') or usage();
+$opt{'default-domain'} =~ /\.$/ or
+  die "The default domain must end with a dot.\n";
 @ARGV or usage();
 system("cd $base_dir && make --silent .ipam.cache") == 0 or die;
 my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
@@ -83,6 +87,12 @@ foreach my $item (@ARGV) {
     indent(1, "Name: ".$prefix->id()."\n");
     router_info($prefix, 1);
   } else {
+    unless ($item =~ /\.$/) {
+      $item .= '.';
+      unless ($item =~ /(\.|^)$opt{'default-domain'}$/) {
+	$item .= $opt{'default-domain'};
+      }
+    }
     my ($network, @prefixes);
     if ($network = $ipam->registry(IPAM::REG_NETWORK)->lookup($item)) {
       @prefixes = $network->prefixes(sub { $_[0]->ip() <=> $_[1]->ip(); });
