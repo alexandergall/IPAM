@@ -3,7 +3,7 @@
 #### Description:   IPAM::Prefix class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Prefix.pm,v 1.5 2012/12/07 11:20:31 gall Exp gall $
+#### RCS $Id: Prefix.pm,v 1.6 2012/12/10 15:26:48 gall Exp gall $
 
 package IPAM::Prefix;
 use IPAM;
@@ -468,7 +468,12 @@ sub lookup_by_ip($$) {
     if ($prefix->ip() == $ip) {
       $result = $prefix;
       last;
-    } elsif ($prefix->ip()->contains($ip)) {
+    } elsif ($prefix->ip()->version() == $ip->version()
+	     and $prefix->ip()->contains($ip)) {
+      ## Note: the version check above is needed to work around
+      ## a probable bug in NetAddr::IP.  Otherwise, 0.0.0.0/0 is
+      ## considered to be contained in ::/0, even though the versions
+      ## are obviously different.
       ($result, @path) = $prefix->registry()->lookup_by_ip($ip);
       unshift(@path, $prefix);
       last;
