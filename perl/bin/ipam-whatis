@@ -172,57 +172,59 @@ sub prefix_info($$) {
   unless (exists $visited_prefixes{$ip->addr()}) {
     $visited_prefixes{$ip->addr()} = 1;
     my $type = $ip->bits() == $ip->masklen() ? 'address' : 'prefix';
+    if (my $iid = $ipam->registry(IPAM::REG_IID)->lookup_by_ip($ip)) {
+      indent($indent, $ip->addr()." is an IPv6 interface identifier.\n");
+      detail($iid, $indent+1);
+      indent($indent+1, "It is assigned to host ".$iid->name()."\n");
+      $opt{recurse} and name_info($iid->name(), $indent+1);
+      $opt{recurse} = $recurse_save;
+      return;
+    }
     my ($prefix, @path) =
       $ipam->address_map()->lookup_by_ip($ip);
     unless ($prefix or @path) {
-      if (my $iid = $ipam->registry(IPAM::REG_IID)->lookup_by_ip($ip)) {
-	indent($indent, $ip->addr()." is an IPv6 interface identifier.\n");
-	detail($iid, $indent+1);
-	indent($indent+1, "It is assigned to host ".$iid->name()."\n");
-	$opt{recurse} and name_info($iid->name(), $indent+1);
+      print "The database contains no information about the $type $ip\n";
+      $opt{recurse} = $recurse_save;
+      return;
+    }
+    if ($prefix) {
+      if ($prefix->isa('IPAM::Address')) {
+	indent($indent, $prefix->name()." is an address.\n");
+	detail($prefix, $indent+1);
+	if (my $canonical_host = $prefix->canonical_host()) {
+	  indent($indent+1, "It has the canonical name ".
+		 $canonical_host->name()."\n");
+	} else {
+	  indent($indent+1, "It has no canonical name.\n");
+	}
+	map { indent($indent+1,
+		     "It is assigned to the host ".$_->name()
+		     .alternatives(IPAM::Alternative::MAP_ADDRESS,
+				   $_, $prefix));
+	      $opt{recurse} and name_info($_->name(), $indent+2) }
+	  $prefix->hosts();
       } else {
-	print "The database contains no information about the $type $ip\n";
+	if (my $network = $prefix->network()) {
+	  indent($indent, $prefix->name()." is assigned to the subnet "
+		 .$network->name()."\n");
+	} else {
+	  indent($indent, $prefix->name()." is assigned to the "
+		 .($prefix->is_stub() ? 'stub network ' : 'address block ')
+		 .$prefix->id()."\n");
+	}
+	detail($prefix, $indent+1);
+	$opt{recurse} and
+	  print_pf_registry($prefix->registry(), $indent+1, $prefix->af());
       }
     } else {
-      if ($prefix) {
-	if ($prefix->isa('IPAM::Address')) {
-	  indent($indent, $prefix->name()." is an address.\n");
-	  detail($prefix, $indent+1);
-	  if (my $canonical_host = $prefix->canonical_host()) {
-	    indent($indent+1, "It has the canonical name ".
-		   $canonical_host->name()."\n");
-	  } else {
-	    indent($indent+1, "It has no canonical name.\n");
-	  }
-	  map { indent($indent+1,
-		       "It is assigned to the host ".$_->name()
-		       .alternatives(IPAM::Alternative::MAP_ADDRESS,
-				     $_, $prefix));
-		$opt{recurse} and name_info($_->name(), $indent+2) }
-	    $prefix->hosts();
-	} else {
-	  if (my $network = $prefix->network()) {
-	    indent($indent, $prefix->name()." is assigned to the subnet "
-		   .$network->name()."\n");
-	  } else {
-	    indent($indent, $prefix->name()." is assigned to the "
-		   .($prefix->is_stub() ? 'stub network ' : 'address block ')
-		   .$prefix->id()."\n");
-	  }
-	  detail($prefix, $indent+1);
-	  $opt{recurse} and
-	    print_pf_registry($prefix->registry(), $indent+1, $prefix->af());
-	}
-      } else {
-	indent($indent, "There is no exact match for the $type $ip\n");
-      }
-      if (@path) {
-	$indent += 1;
-	indent($indent++, "It is contained in a branch of the address map\n");
-	foreach my $element (@path) {
-	  indent($indent++, sprintf "%-20s  %s\n", $element->name(),
-		 $element->id());
-	}
+      indent($indent, "There is no exact match for the $type $ip\n");
+    }
+    if (@path) {
+      $indent += 1;
+      indent($indent++, "It is contained in a branch of the address map\n");
+      foreach my $element (@path) {
+	indent($indent++, sprintf "%-20s  %s\n", $element->name(),
+	       $element->id());
       }
     }
   }
