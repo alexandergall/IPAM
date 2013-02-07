@@ -221,7 +221,7 @@ sub prefix_info($$) {
     }
     if (@path) {
       $indent += 1;
-      indent($indent++, "It is contained in a branch of the address map\n");
+      indent($indent++, "It is covered by a branch of the address map\n");
       foreach my $element (@path) {
 	indent($indent++, sprintf "%-20s  %s\n", $element->name(),
 	       $element->id());
