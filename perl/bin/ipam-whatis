@@ -262,9 +262,10 @@ sub print_pf_registry($$$) {
     indent($indent, sprintf("%-35s  %-30s %-30s\n", $prefix->name(),
 			    $prefix->id(), $prefix->description()));
     next if ($prefix->is_stub() and $opt{'no-stub-recurse'});
-    if ($prefix->isa('IPAM::Address') and $opt{recurse}
-	and $prefix->canonical_host()) {
-      name_info($prefix->id(), $indent+1);
+    if ($prefix->isa('IPAM::Address')) {
+      if ($opt{recurse} and $prefix->canonical_host()) {
+	name_info($prefix->id(), $indent+1);
+      }
     } elsif($opt{recurse}) {
       print_pf_registry($prefix->registry(), $indent+1, $prefix->af());
     }
