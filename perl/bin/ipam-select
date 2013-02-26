@@ -4,7 +4,7 @@
 #### Description:   Select objects based on type and tag
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jan 10 2013
-#### RCS $Id: ipam-select,v 1.2 2013/01/10 15:24:58 gall Exp gall $
+#### RCS $Id: ipam-select,v 1.3 2013/01/18 13:17:43 gall Exp gall $
 ####
 
 ## Local Variables:
@@ -56,6 +56,7 @@ if ($opt{type} eq 'subnet') {
     if ($opt{detail}) {
       my $desc = $network->description();
       $desc and print "  Description: $desc\n";
+      map { print "  Tag: ".$_."\n"} keys(%{$network->tags()});
       map { print "  Prefix: ".$_->name()."\n" } $network->prefixes($sort_by_ip);
     }
   }
@@ -84,6 +85,7 @@ sub walk_registry($) {
 	if ($opt{detail}) {
 	  my $desc = $prefix->description();
 	  $desc and print "  Description: $desc\n";
+	  map { print "  Tag: ".$_."\n"} keys(%{$prefix->tags()});
 	  print "  Name: ".$prefix->id()."\n";
 	}
       }
