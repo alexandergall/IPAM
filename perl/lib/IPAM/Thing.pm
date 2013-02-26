@@ -3,7 +3,7 @@
 #### Description:   IPAM::Thing class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Thing.pm,v 1.9 2013/01/09 16:03:25 gall Exp gall $
+#### RCS $Id: Thing.pm,v 1.10 2013/01/16 15:09:43 gall Exp gall $
 package IPAM::Thing;
 
 =head1 NAME
@@ -162,15 +162,19 @@ sub ttl($$) {
   $thing->has_tag(qw/foo bar/) and
     print $thing->name()." is tagged as foo and bar\n";
 
-Returns a true value if C<$thing> is tagged with all labels in
-C<@tags>, false otherwise.  An empty list matches all tags.
+The elements of C<@tags> are treated as Perl regular expressions and
+are matched against all the Thing's tags.  The method returns a true
+value if all expressions yield at least one match, false otherwise.
+An empty list is equivalent to C<@tags = ( '.*' )>, i.e. it matches
+all tags.
 
 =cut
 
 sub has_tags($@) {
-  my ($self, @tags) = @_;
-  foreach my $tag (@tags) {
-    exists $self->{tags}{$tag} or return(undef);
+  my ($self, @tags_in) = @_;
+  my @tags = keys(%{$self->{tags}});
+  foreach my $tag (@tags_in) {
+    grep /$tag/, @tags or return(undef);
   }
   1;
 }
