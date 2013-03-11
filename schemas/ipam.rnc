@@ -3,7 +3,7 @@
 # ## Description:   RelaxNG schema for the IPAM ipam-base element
 # ## Author:        Alexander Gall gall@switch.ch
 # ## Created:       Sep 4 2012
-# ## RCS $Id: ipam.rnc,v 1.7 2012/09/10 15:16:28 gall Exp gall $
+# ## RCS $Id: ipam.rnc,v 1.8 2012/09/10 15:29:36 gall Exp gall $
 # ##
 datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
 namespace xi = "http://www.w3.org/2001/XInclude"
@@ -38,13 +38,18 @@ ipam-base = element ipam-base {
          attribute href { text },
          empty 
       }),
-   element networks {
+   (element networks {
+      attribute xml:base { text }?,
       (network_or_group |
       element xi:include { 
          attribute href { text },
          empty 
+      })*
+   } |
+      element xi:include {
+         attribute href { text },
+         empty
       })+
-   }
 }
 
 ## These grammars contain start elements of their own to make them
