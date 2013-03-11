@@ -9,6 +9,20 @@ SERIALIZE = ipam-create-cache
 DUMP = xmllint --xinclude
 DIFF = diff
 
+define FIND_XML_FILES
+	$(filter-out %/schemas.xml, $(shell $(FIND) $(1) -type f -name "*.xml"))
+endef
+
+### Directories and files that contain <networks> tags.
+### Used as prerequisites for validate and construction
+### of automatic includes.
+NETWORKS_DIRS := $(wildcard networks net-*/networks)
+NETWORKS_FILES := $(call FIND_XML_FILES,$(NETWORKS_DIRS))
+### Directories and files that contain parts of the
+### address map.  Used as prerequisites for validate.
+BLOCKS_DIRS := $(wildcard net-*/blocks-*)
+BLOCKS_FILES := $(call FIND_XML_FILES,$(BLOCKS_DIRS))
+
 .DEFAULT_GOAL = zones
 
 ### Validate ipam.xml aginst the schema.  It appears that only James Clark
@@ -16,10 +30,21 @@ DIFF = diff
 ### libxml2 is buggy, which makes XML::LibXML::RelaxNG unusable as well.
 ### For now, we perform validation outside of the IPAM Perl module using
 ### jing.
-validate: ipam.xml alternatives.xml address-map.xml iid.xml zones.xml $(wildcard networks/*.xml net-*/networks/*.xml)
+validate: .networks-auto-include ipam.xml alternatives.xml address-map.xml iid.xml zones.xml $(NETWORKS_FILES) $(BLOCK_FILES)
 	@echo "<Validating database>" 1>&2
 	@$(JING) -c schemas/ipam.rnc ipam.xml
 	@umask 002; echo `id -u -n` > $@
+
+.networks-auto-include: $(NETWORKS_DIRS)
+	@umask 002; \
+	set -e; \
+	echo "<Generating automatic includes in file $@>"; \
+	echo "<!-- Automatically generated file.  DO NOT EDIT. -->" > $@; \
+	echo "<networks xmlns:xi=\"http://www.w3.org/2001/XInclude\">" >>$@; \
+	for file in $(NETWORKS_FILES); do \
+		echo "  <xi:include href=\"$$file\"/>" >>$@; \
+	done; \
+	echo "</networks>" >>$@
 
 dump: validate
 	$(DUMP) ipam.xml
