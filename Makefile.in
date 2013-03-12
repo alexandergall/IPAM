@@ -89,21 +89,24 @@ zones: validate zones/.links.stamp
 	}; \
 	trap cleanup INT TERM EXIT; \
 	$(GEN-ZONES) --suffix=new; \
-	for file in zones/*; do \
-		[ -f $$file -a -f $${file}new ] || continue; \
+	for file_n in `$(FIND) zones -name "*new"`; do \
+		file=`echo $$file_n | sed -e 's/new$$//'`; \
+		if [ -f $$file ]; then \
+			if $(DIFF) $$file $$file_n >/dev/null; then \
+				echo No changes in `basename $$file`; \
+				continue; \
+			fi; \
+		fi; \
+		rm -f $$file; \
+		mv $$file_n $$file; \
 		[ -h $${file}install ] || continue; \
 		dest=`readlink $${file}install`; \
 		[ -f $$dest ] || touch $$dest; \
-		if ! $(DIFF) $$file $${file}new >/dev/null; then \
-			mv $${file}new $$file; \
-			rm -f $$dest.old; \
-			mv $$dest $$dest.old; \
-			cp $$file $$dest; \
-			dir=`dirname $$dest`; \
-			[ -f $$dir/Makefile ] && (cd $$dir && make); \
-		else \
-			echo No changes in `basename $$file`; \
-		fi; \
+		rm -f $$dest.old; \
+		mv $$dest $$dest.old; \
+		cp $$file $$dest; \
+		dir=`dirname $$dest`; \
+		[ -f $$dir/Makefile ] && (cd $$dir && make); \
 	done; \
 	touch $@
 
