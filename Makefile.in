@@ -30,7 +30,7 @@ BLOCKS_FILES := $(call FIND_XML_FILES,$(BLOCKS_DIRS))
 ### libxml2 is buggy, which makes XML::LibXML::RelaxNG unusable as well.
 ### For now, we perform validation outside of the IPAM Perl module using
 ### jing.
-validate: .networks-auto-include ipam.xml alternatives.xml address-map.xml iid.xml zones.xml $(NETWORKS_FILES) $(BLOCK_FILES)
+validate: .networks-auto-include ipam.xml alternatives.xml address-map.xml iid.xml zones.xml $(NETWORKS_FILES) $(BLOCKS_FILES)
 	@echo "<Validating database>" 1>&2
 	@$(JING) -c schemas/ipam.rnc ipam.xml
 	@umask 002; echo `id -u -n` > $@
