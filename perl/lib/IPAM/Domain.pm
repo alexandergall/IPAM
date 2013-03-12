@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.14 2013/01/16 15:12:56 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.15 2013/01/18 13:15:52 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -101,7 +101,7 @@ sub add_rr($$$$$$@) {
 	 .": mixing of CNAME with other record types not allowed\n";
     if ($self->exists_rrset($type)) {
       if ($type eq 'CNAME') {
-	my ($file, $line) = (@{$self->{types}{$type}{rr}})[0]->{nodeinfo};
+	my ($file, $line) = @{(@{$self->{types}{$type}{rr}})[0]->{nodeinfo}};
 	die $self->fqdn().": multiple CNAME records not allowed"
 	  ." (conflicts with definition at $file, $line)\n";
       }
