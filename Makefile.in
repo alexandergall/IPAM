@@ -10,7 +10,7 @@ DUMP = xmllint --xinclude
 DIFF = diff
 
 define FIND_XML_FILES
-	$(filter-out %/schemas.xml, $(shell $(FIND) $(1) -type f -name "*.xml"))
+	$(filter-out %/schemas.xml %.NAI.xml, $(shell $(FIND) $(1) -type f -name "*.xml"))
 endef
 
 ### Directories and files that contain <networks> tags.
