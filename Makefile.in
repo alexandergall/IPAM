@@ -1,6 +1,7 @@
 export IPAM_BASE = @@IPAM_BASE@@
 
 PATH = /bin:/usr/bin:$(IPAM_BASE)/bin
+SHELL = /bin/bash
 
 JING = java -Dorg.apache.xerces.xni.parser.XMLParserConfiguration=org.apache.xerces.parsers.XIncludeParserConfiguration -jar /usr/share/java/jing.jar
 FIND = find
@@ -9,8 +10,10 @@ SERIALIZE = ipam-create-cache
 DUMP = xmllint --xinclude
 DIFF = diff
 
+CONFIRM = y
+
 define FIND_XML_FILES
-	$(filter-out %/schemas.xml %.NAI.xml, $(shell $(FIND) $(1) -type f -name "*.xml"))
+	$(filter-out %/schemas.xml, $(shell $(FIND) $(1) -type f -name "*.xml"))
 endef
 
 ### Directories and files that contain <networks> tags.
@@ -51,7 +54,8 @@ validate: .networks-auto-include ipam.xml alternatives.xml address-map.xml iid.x
 	echo "<!-- Automatically generated file.  DO NOT EDIT. -->" > $@; \
 	echo "<networks xmlns:xi=\"http://www.w3.org/2001/XInclude\">" >>$@; \
 	for file in $(NETWORKS_FILES); do \
-		echo "  <xi:include href=\"$$file\"/>" >>$@; \
+		[ -f $${file}.no-auto-include ] || \
+			echo "  <xi:include href=\"$$file\"/>" >>$@; \
 	done; \
 	echo "</networks>" >>$@
 
@@ -84,39 +88,131 @@ cache: .ipam.cache
 diff:
 	@$(FIND) . -name "*.xml" -newer validate -exec rcsdiff -u {} \;
 
+lock-dns:
+	@umask 002; \
+	set -e; \
+	[ -f .dns-lock ] && \
+		{ user=`stat --format="%U" .dns-lock`; \
+		  echo "Already locked by user $$user."; \
+		  if [ -s .dns-lock ]; then \
+		  	echo "Reason:"; \
+			cat .dns-lock; \
+		  else \
+			echo "No reason given."; \
+		  fi; \
+		  exit 1; }; \
+	$(MAKE) --silent .dns-lock
+
+unlock-dns:
+	@set -e; \
+	[ -f .dns-lock ] || \
+		{ echo "No lock has been set."; \
+		  exit 1; }; \
+	user=`stat --format="%U" .dns-lock`; \
+	if [ $$user == `id -un` -o "$(FORCE)" == "y" ]; then \
+		rm -f .dns-lock; \
+		echo "The DNS lock has been succefully removed."; \
+	else \
+		echo "The lock is owned by user $$user."; \
+		echo 'Use "make unlock-dns FORCE=y" to override.'; \
+	fi
+
+.dns-lock:
+	@umask 002; \
+	set -e; \
+	touch $@; \
+	cleanup() { \
+		trap - INT TERM EXIT; \
+		echo "Abortet, lock has not been set."; \
+		rm -f $@; \
+	}; \
+	trap cleanup INT TERM EXIT; \
+	echo "Locking out changes to the DNS."; \
+	echo "Please give a brief description of the reason, type CTRL-D to commit"; \
+	cat >$@; \
+	trap - INT TERM EXIT
+
 ### Generate zone file snippets and rebuild the zones.  The snippets
 ### are written to a local directory and compared to the d.ipam files
 ### currently installed in the proper zone directories.  The newly
 ### generated files are installed only if they differ from the old ones
 ### to avoid building the zone unnecessarily.
-zones: validate zones/.links.stamp
+zones: zones/.stamp
+
+zones/.stamp: validate zones/.links.stamp
 	@umask 002; \
 	set -e; \
+	[ -f .dns-lock ] && \
+		{ user=`stat --format="%U" $@`; \
+		  echo "Changes to the DNS have been locked out by user $$user on `stat --format="%y" .dns-lock`."; \
+		  if [ -s .dns-lock ]; then \
+		  	echo "Reason:"; \
+			cat .dns-lock; \
+		  else \
+			echo "No reason given."; \
+		  fi; \
+		  echo 'Use "make unlock-dns" to unlock.'; \
+		  while true; do \
+			read -N1 -s -p 'Would you like to review the changes that would be applied? (y/n) ' yn; \
+			case $$yn in \
+				[yY] ) review="y"; echo; break;; \
+				[nN] ) echo; exit 1;; \
+			esac; \
+		  done; }; \
 	cleanup() { \
 		trap - INT TERM EXIT; \
 		rm -f zones/*new; \
+		rm -f zones/diffs; \
 	}; \
 	trap cleanup INT TERM EXIT; \
 	$(GEN-ZONES) --suffix=new; \
+	echo "<Detecting zones that need to be updated>"; \
 	for file_n in `$(FIND) zones -name "*new"`; do \
 		file=`echo $$file_n | sed -e 's/new$$//'`; \
+		zone=`basename $$file`; \
 		if [ -f $$file ]; then \
-			if $(DIFF) $$file $$file_n >/dev/null; then \
-				echo No changes in `basename $$file`; \
-				continue; \
+			if ! $(DIFF) --unified=5 $$file $$file_n >zones/diffs; then \
+				files="$$files $$file"; \
+				echo "Changes in zone $$zone:"; \
+				echo; \
+				cat zones/diffs; \
+				echo; \
 			fi; \
 		fi; \
-		rm -f $$file; \
-		mv $$file_n $$file; \
-		[ -h $${file}install ] || continue; \
-		dest=`readlink $${file}install`; \
-		[ -f $$dest ] || touch $$dest; \
-		rm -f $$dest.old; \
-		mv $$dest $$dest.old; \
-		cp $$file $$dest; \
-		dir=`dirname $$dest`; \
-		[ -f $$dir/Makefile ] && (cd $$dir && make); \
 	done; \
+	if [ "$$review" == "y" ]; then \
+		echo "Discarding all changes due to lock."; \
+		exit 1; \
+	fi; \
+	if [ -n "$$files" ]; then \
+		if [ "$(CONFIRM)" == "y" ]; then \
+			while true; do \
+				read -N1 -s -p 'Press "c" to confirm these changes or "a" to abort.' ans; \
+				case $$ans in \
+					[cC] ) echo; break;; \
+					[aA] ) echo; echo "Aborting.  No changes have been made to the DNS."; exit 1;; \
+				esac; \
+				echo; \
+			done; \
+		fi; \
+		echo "<Committing changes to the DNS>"; \
+		for file in $$files; do \
+			rm -f $$file; \
+			mv $${file}new $$file; \
+			[ -h $${file}install ] || continue; \
+			dest=`readlink $${file}install`; \
+			[ -f $$dest ] || touch $$dest; \
+			rm -f $$dest.old; \
+			mv $$dest $$dest.old; \
+			cp $$file $$dest; \
+			dir=`dirname $$dest`; \
+			if [ -f $$dir/Makefile ]; then \
+				(cd $$dir && make); \
+			else \
+				echo "Skipping $$dir: Makefile missing."; \
+			fi; \
+		done; \
+	fi; \
 	touch $@
 
 ### The zone snippets are written to the directory "zones" within the
