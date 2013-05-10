@@ -128,7 +128,7 @@ unlock-dns:
 	}; \
 	trap cleanup INT TERM EXIT; \
 	echo "Locking out changes to the DNS."; \
-	echo "Please give a brief description of the reason, type CTRL-D to commit"; \
+	echo "Please give a brief description of the reason, type CTRL-d to commit"; \
 	cat >$@; \
 	trap - INT TERM EXIT
 
