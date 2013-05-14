@@ -19,7 +19,7 @@ endef
 ### Directories and files that contain <networks> tags.
 ### Used as prerequisites for validate and construction
 ### of automatic includes.
-NETWORKS_DIRS := $(wildcard networks net-*/networks)
+NETWORKS_DIRS := $(wildcard net-*/networks)
 NETWORKS_FILES := $(call FIND_XML_FILES,$(NETWORKS_DIRS))
 ### Directories and files that contain parts of the
 ### address map.  Used as prerequisites for validate.
