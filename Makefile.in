@@ -88,6 +88,19 @@ cache: .ipam.cache
 diff:
 	@$(FIND) . -name "*.xml" -newer validate -exec rcsdiff -u {} \;
 
+### Show locked files
+LOCKER =
+show-locks:
+	@for d in `find . -type d -name RCS`; do\
+		rlog -L -R $(LOCKER) $$d/*;\
+	done | while read rcsfile; do\
+		set -- `rlog -l $$rcsfile | grep -A1 '^locks' | tail -1 | cut -d: --output-delimiter=' ' -f1,2`;\
+		echo `echo $$rcsfile | sed -e 's/RCS\///;s/,v$$//;s/\.\///'` "locked by user $$1 (revision $$2)";\
+	done
+
+show-my-locks:
+	@$(MAKE) --silent show-locks LOCKER="-l$(USER)"
+
 lock-dns:
 	@umask 002; \
 	set -e; \
