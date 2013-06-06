@@ -183,14 +183,22 @@ zones/.stamp: validate zones/.links.stamp
 	for file_n in `$(FIND) zones -name "*new"`; do \
 		file=`echo $$file_n | sed -e 's/new$$//'`; \
 		zone=`basename $$file`; \
-		if [ -f $$file ]; then \
-			if ! $(DIFF) --unified=5 $$file $$file_n >zones/diffs; then \
-				files="$$files $$file"; \
-				echo "Changes in zone $$zone:"; \
-				echo; \
-				cat zones/diffs; \
-				echo; \
+		if [ ! -f $$file ]; then \
+			echo "Rebuilding missing zone file $$file"; \
+			if [ -f $${file}install ]; then \
+				 cp $${file}install $$file; \
+			else \
+				[ -h $${file}install ] || \
+					echo "Zone $$zone (file $$file) requires manual update on the name server"; \
+				cp $$file_n $$file; \
 			fi; \
+		fi; \
+		if ! $(DIFF) --unified=5 $$file $$file_n >zones/diffs; then \
+			files="$$files $$file"; \
+			echo "Changes in zone $$zone:"; \
+			echo; \
+			cat zones/diffs; \
+			echo; \
 		fi; \
 	done; \
 	if [ "$$review" == "y" ]; then \
@@ -212,7 +220,11 @@ zones/.stamp: validate zones/.links.stamp
 		for file in $$files; do \
 			rm -f $$file; \
 			mv $${file}new $$file; \
-			[ -h $${file}install ] || continue; \
+			if [ ! -h $${file}install ]; then \
+				zone=`basename $$file`; \
+				echo "Zone $$zone (file $$file) requires manual update on the name server"; \
+				continue; \
+			fi; \
 			dest=`readlink $${file}install`; \
 			[ -f $$dest ] || touch $$dest; \
 			rm -f $$dest.old; \
@@ -234,9 +246,24 @@ zones/.stamp: validate zones/.links.stamp
 ### the proper zone directory.
 zones/.links.stamp: zones.xml
 	@umask 002; \
+	set -o pipefail; \
 	set -e; \
-	rm -f zones/*; \
+	cleanup() { \
+		rm -rf zones.new; \
+	}; \
+	trap cleanup INT TERM EXIT; \
+	mkdir zones.new; \
 	$(GEN-ZONES) --conf | while read zone dir; do \
-		ln -s $$dir/d.ipam zones/$${zone}install; \
+		if [ -n "$$dir" ]; then \
+			if [ -h zones/$${zone}install ]; then \
+				cp -p -d zones/$${zone}install zones.new; \
+			else \
+				ln -s $$dir/d.ipam zones.new/$${zone}install; \
+			fi; \
+		fi; \
+		[ -f zones/$$zone ] && cp -p zones/$$zone zones.new || true; \
 	done; \
+	mv zones zones.old; \
+	mv zones.new zones; \
+	rm -rf zones.old; \
 	touch $@
