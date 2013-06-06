@@ -34,7 +34,6 @@ my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 if ($opt{conf}) {
   foreach my $zone ($ipam->registry(IPAM::REG_ZONE)->things()) {
     my $dir = $zone->directory();
-    next if $dir eq 'IGNORE';
     print $zone->name()." $dir\n";
   }
   exit(0);
@@ -52,7 +51,7 @@ if (@ARGV) {
 foreach my $zone (sort { $a->name() cmp $b->name() } @zones) {
   my $file = join('/', $zones_dir, $zone->name().$opt{suffix});
   print "Generating ".$zone->name();
-  $zone->directory() eq 'IGNORE' and print " (will not be installed).";
+  $zone->directory() or print " (will not be installed).";
   print "\n";
   open(ZONE, ">$file") or
     die "Can't open $file: $!";
