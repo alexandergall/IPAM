@@ -531,7 +531,7 @@ sub _register_zones($$@) {
     $name .= '.' unless $name =~ /\.$/;
     my $directory = $node->getAttribute('directory');
     $self->_verbose("Registering zone $name with directory $directory.\n");
-    unless ($directory eq 'IGNORE') {
+    if ($directory) {
       $directory = join('/', $base, $directory) unless $directory =~ /^\//;
     }
     my $zone = IPAM::Zone->new($node, $name, $directory);
