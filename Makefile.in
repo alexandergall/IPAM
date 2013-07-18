@@ -60,7 +60,7 @@ validate: .networks-auto-include ipam.xml alternatives.xml address-map.xml iid.x
 	echo "</networks>" >>$@
 
 dump: validate
-	$(DUMP) ipam.xml
+	@$(DUMP) ipam.xml
 
 cache: .ipam.cache
 
