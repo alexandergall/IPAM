@@ -3,7 +3,7 @@
 #### Description:   IPAM::Host class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Host.pm,v 1.2 2012/07/13 15:20:57 gall Exp gall $
+#### RCS $Id: Host.pm,v 1.3 2013/02/06 13:30:42 gall Exp gall $
 
 package IPAM::Host;
 use IPAM::Thing;
@@ -31,9 +31,9 @@ which names are used for aliases and secondary address records.
 
 =over 4
 
-=item new($node, $name, $network)
+=item C<new($node, $name, $network)>
 
-my $host = IPAM::Host->new($node, $name, $network);
+  my $host = IPAM::Host->new($node, $name, $network);
 
 Creates an instance of a host and associates the L<IPAM::Network>
 object $network with it.
@@ -59,10 +59,10 @@ sub new($$$) {
 
 =over 4
 
-item dns($state)
+=item C<dns($state)>
 
-my $dns_state = $host->dns();
-$host->dns(0);
+  my $dns_state = $host->dns();
+  $host->dns(0);
 
 If $state is defined, it is treated as a boolean value and the flag
 whether DNS information should be generated for the host or not is set
@@ -76,9 +76,9 @@ sub dns($$) {
   return($self->{dns});
 }
 
-=item network()
- 
-my $network = $host->network();
+=item C<network()>
+
+  my $network = $host->network();
 
 Returns the L<IPAM::Network> object with which the host is associated.
 
@@ -89,9 +89,9 @@ sub network($) {
   return($self->{network});
 }
 
-=item add_address($address)
+=item C<add_address($address)>
 
-eval { $host->add_address($address) } or die $@;
+  eval { $host->add_address($address) } or die $@;
 
 Adds the L<IPAM::Address> object $address to the host's address
 registry.  An exception is raised if the address is already registered
@@ -104,13 +104,12 @@ sub add_address($$) {
   $self->{address_r}->add($address);
 }
 
-=item addresses($sorter, $af)
+=item C<addresses($sorter, $af)>
 
-my @addresses = $host->addresses();
-my @addresses = $host->addresses(undef, '6');
-my @addresses = $host->addresses(sub { my ($a, $b) = @_;
-                                       $a->ip() cmp $b->ip()});
-
+  my @addresses = $host->addresses();
+  my @addresses = $host->addresses(undef, '6');
+  my @addresses = $host->addresses(sub { my ($a, $b) = @_;
+                                         $a->ip() cmp $b->ip()});
 
 Returns the list of L<IPAM::Address> objects of the given address
 family (or all address families if $af is not defined) that are
@@ -124,9 +123,9 @@ sub addresses($$$) {
   return($self->{address_r}->things($sorter, $af));
 }
 
-=item address_registry()
+=item C<address_registry()>
 
-my $registry = $host->address_registry();
+  my $registry = $host->address_registry();
 
 Returns the L<IPAM::Address::Registry> object of the host.
 
@@ -137,9 +136,9 @@ sub address_registry($) {
   return($self->{address_r});
 }
 
-=item add_alias($alias)
+=item C<add_alias($alias)>
 
-eval { $host->add_alias($alias) } or die $@;
+  eval { $host->add_alias($alias) } or die $@;
 
 Adds the L<IPAM::Thing> object $alias to the host's alias registry.
 Such a reference will create a DNS CNAME record for the name
@@ -154,9 +153,9 @@ sub add_alias($$) {
   $self->{alias_r}->add($alias);
 }
 
-=item aliases($sorter)
+=item C<aliases($sorter)>
 
-my @aliases = $host->aliases();
+  my @aliases = $host->aliases();
 
 Returns the list of L<IPAM::Thing> objects in the host's "alias"
 registry.  An optional anonymous subroutine C<$sorter> will be passed
@@ -169,9 +168,9 @@ sub aliases($$) {
   return($self->{alias_r}->things($sorter));
 }
 
-=item alias_registry()
+=item C<alias_registry()>
 
-my $registry = $host->alias_registry();
+  my $registry = $host->alias_registry();
 
 Returns the L<IPAM::Registry> associated with the "alias" registry of
 the host.
@@ -183,9 +182,9 @@ sub alias_registry($) {
   return($self->{alias_r});
 }
 
-=item add_hosted_on($hosted_on)
+=item C<add_hosted_on($hosted_on)>
 
-eval { $host->add_hosted_on($hosted_on) } or die $@;
+   eval { $host->add_hosted_on($hosted_on) } or die $@;
 
 Adds the L<IPAM::Thing> object $hosted_on to the host's "hosted-on"
 registry.  Such a reference will create a PTR record for the host
@@ -202,9 +201,9 @@ sub add_hosted_on($$) {
   $self->{hosted_on_r}->add($hosted_on);
 }
 
-=item hosted_on()
+=item C<hosted_on()>
 
-my @aliases = $host->hosted_on();
+  my @aliases = $host->hosted_on();
 
 Returns the list of L<IPAM::Thing> objects in the host's "hosted-on" registry.
 
@@ -215,9 +214,9 @@ sub hosted_on($) {
   return($self->{hosted_on_r}->things());
 }
 
-=item hosted_on_registry()
+=item C<hosted_on_registry()>
 
-my $registry = $host->hosted_on_registry();
+  my $registry = $host->hosted_on_registry();
 
 Returns the L<IPAM::Registry> associated with the "hosted-on" registry
 of the host.
