@@ -3,7 +3,7 @@
 #### Description:   IPAM::IID class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: IID.pm,v 1.5 2012/09/04 13:35:42 gall Exp gall $
+#### RCS $Id: IID.pm,v 1.6 2013/01/16 15:22:36 gall Exp gall $
 
 package IPAM::IID;
 our @ISA = qw(IPAM::Thing);
@@ -11,7 +11,7 @@ my $zero_subnet_v6 = NetAddr::IP->new6('::/64');
 
 =head1 NAME
 
-IPAM::IID - Class that describes a canonical host
+IPAM::IID - Class that describes an IPv6 interface identifier (IID)
 
 =head1 SYNOPSIS
 
