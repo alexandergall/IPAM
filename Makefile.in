@@ -108,13 +108,14 @@ lock-dns:
 		{ user=`stat --format="%U" .dns-lock`; \
 		  echo "Already locked by user $$user."; \
 		  if [ -s .dns-lock ]; then \
-		  	echo "Reason:"; \
+		  	echo -n "Reason: "; \
 			cat .dns-lock; \
-		  else \
-			echo "No reason given."; \
 		  fi; \
 		  exit 1; }; \
 	$(MAKE) --silent .dns-lock
+
+lock-dns-msg: export LOCK_MSG=1
+lock-dns-msg: lock-dns
 
 unlock-dns:
 	@set -e; \
@@ -141,8 +142,11 @@ unlock-dns:
 	}; \
 	trap cleanup INT TERM EXIT; \
 	echo "Locking out changes to the DNS."; \
-	echo "Please give a brief description of the reason, type CTRL-d to commit"; \
-	cat >$@; \
+	if [ -n "$(LOCK_MSG)" ]; then \
+		echo "Please provide a brief message that will be displayed to other users when they attempt to acquire the lock while you own it."; \
+		echo "Type CTRL-d to commit, CTRL-c to abort."; \
+		cat >$@; \
+	fi; \
 	trap - INT TERM EXIT
 
 ### Generate zone file snippets and rebuild the zones.  The snippets
