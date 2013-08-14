@@ -159,23 +159,17 @@ zones: zones/.stamp
 zones/.stamp: validate zones/.links.stamp
 	@umask 002; \
 	set -e; \
-	[ -f .dns-lock ] && \
-		{ user=`stat --format="%U" $@`; \
-		  echo "Changes to the DNS have been locked out by user $$user on `stat --format="%y" .dns-lock`."; \
-		  if [ -s .dns-lock ]; then \
-		  	echo "Reason:"; \
-			cat .dns-lock; \
-		  else \
-			echo "No reason given."; \
-		  fi; \
-		  echo 'Use "make unlock-dns" to unlock.'; \
-		  while true; do \
-			read -N1 -s -p 'Would you like to review the changes that would be applied? (y/n) ' yn; \
-			case $$yn in \
-				[yY] ) review="y"; echo; break;; \
-				[nN] ) echo; exit 1;; \
-			esac; \
-		  done; }; \
+	if [ -f .dns-lock ]; then \
+		user=`stat --format="%U" $@`; \
+		if [ `id -un` != $$user ]; then \
+			echo "Changes to the DNS have been locked out by user $$user on `stat --format="%y" .dns-lock`."; \
+			if [ -s .dns-lock ]; then \
+				echo -n "Reason: "; \
+				cat .dns-lock; \
+			fi; \
+			exit 1; \
+		fi; \
+	fi; \
 	cleanup() { \
 		trap - INT TERM EXIT; \
 		rm -f zones/*new; \
@@ -205,10 +199,6 @@ zones/.stamp: validate zones/.links.stamp
 			echo; \
 		fi; \
 	done; \
-	if [ "$$review" == "y" ]; then \
-		echo "Discarding all changes due to lock."; \
-		exit 1; \
-	fi; \
 	if [ -n "$$files" ]; then \
 		if [ "$(CONFIRM)" == "y" ]; then \
 			while true; do \
