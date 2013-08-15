@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.15 2013/01/18 13:15:52 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.16 2013/03/12 16:17:12 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -75,8 +75,17 @@ optional array C<@nodeinfo> is a list of filename and linenumber where
 the element of the IPAM database is defined from which the resource
 record was derived.
 
-If the record is of type CNAME, exceptions are raised if either a
-CNAME or a record of any other type already exists.
+An exception is raised if
+
+=over 4
+
+=item *
+C<$type> is 'CNAME' but other records (including CNAME) already exist.
+
+=item *
+C<$type> is not 'CNAME' but a CNAME record already exists
+
+=back
 
 If the record is not of type CNAME and the RRset already exists, it is
 checked whether C<$ttl> matches the TTL of the RRset.  If this is not
@@ -94,11 +103,33 @@ sub add_rr($$$$$$@) {
   my $key = 'types';
   $type = uc($type);
   if ($dns) {
-    (($type eq 'CNAME' && $self->types() != 0
-      && not $self->exists_rrset($type)) or
-     ($type ne 'CNAME' and grep { $_ eq 'CNAME' } $self->types)) and
-       die $self->fqdn()
-	 .": mixing of CNAME with other record types not allowed\n";
+    if ($type eq 'CNAME' && $self->types() != 0
+	&& not $self->exists_rrset($type)) {
+      ## We're trying to add a CNAME but at least one non-CNAME
+      ## RR already exists.  Try to make the error message more
+      ## meaningful by including informationa about one of
+      ## these existing records.
+      my ($file, $line);
+    TYPE:
+      for $type ($self->types()) {
+	for my $rr (@{$self->{types}{$type}{rr}}) {
+	  ($file, $line) = @{$rr->{nodeinfo}};
+	  last TYPE if defined $file;
+	}
+      }
+      die $self->fqdn()
+	.": can't add a CNAME record when records of other types already exist"
+	  .(defined $file ? " (conflicts with definition at "
+	   ."$file, $line)" : '')."\n";
+    }
+    if ($type ne 'CNAME' and grep { $_ eq 'CNAME' } $self->types) {
+      ## We're trying to add a non-CNAME RR but a CNAME already exists
+      my ($file, $line) = @{(@{$self->{types}{'CNAME'}{rr}})[0]->{nodeinfo}};
+      die $self->fqdn()
+	.": can't add record of type $type when a CNAME already exists"
+	  .(defined $file ? " (conflicts with definition at "
+	    ."$file, $line)" : '')."\n";
+    }
     if ($self->exists_rrset($type)) {
       if ($type eq 'CNAME') {
 	my ($file, $line) = @{(@{$self->{types}{$type}{rr}})[0]->{nodeinfo}};
