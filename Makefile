@@ -2,7 +2,7 @@ PATH = /bin:/usr/bin
 SHELL = /bin/bash
 INSTALL = install -g bind
 INSTALL_DIR = /home/noc/IPAM
-DIRS = $(INSTALL_DIR) $(patsubst %,$(INSTALL_DIR)/%,networks schemas zones blocks)
+DIRS = $(INSTALL_DIR) $(patsubst %,$(INSTALL_DIR)/%,networks schemas zones blocks archive archive/RCS)
 SCHEMAS = $(patsubst %,$(INSTALL_DIR)/%,$(wildcard schemas/*.rnc))
 LOCATING_FILES = $(INSTALL_DIR)/schemas.xml $(INSTALL_DIR)/networks/schemas.xml $(INSTALL_DIR)/blocks/schemas.xml
 define transform
