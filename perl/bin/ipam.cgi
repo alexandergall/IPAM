@@ -24,7 +24,7 @@ $parms[0] eq 'cmd' or error_400('Missing cmd parameter');
 shift(@parms);
 
 if ($q->param('cmd') eq 'dump') {
-  $cmd = "cd $IPAM_BASE && make dump";
+  $cmd = "cd $IPAM_BASE && make dump-from-archive";
   $content_type = 'application/xml';
 } else {
   $cmd = $IPAM_BIN.'/'.'ipam-'.$q->param('cmd');
