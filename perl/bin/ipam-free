@@ -62,7 +62,7 @@ GetOptions(\%opt, "defaul-domain=s", "all", "aggregate",
 	   "stats=s", "threshold=i", "stub-limit=i", "recurse") or usage();
 @ARGV == 1 or usage();
 exists $stat_modes{$opt{stats}} or usage();
-system("cd $base_dir && make --silent .ipam.cache") == 0 or die;
+system("cd $base_dir && make --silent cache-maybe-rebuild") == 0 or die;
 my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 my $fqdn = $ARGV[0];
 $fqdn .= '.'.$opt{'default-domain'} unless $fqdn =~ /\.$/;
