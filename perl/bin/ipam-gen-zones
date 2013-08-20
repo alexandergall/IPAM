@@ -50,7 +50,7 @@ if (@ARGV) {
 }
 foreach my $zone (sort { $a->name() cmp $b->name() } @zones) {
   my $file = join('/', $zones_dir, $zone->name().$opt{suffix});
-  print "Generating ".$zone->name();
+  print $zone->name();
   $zone->directory() or print " (will not be installed).";
   print "\n";
   open(ZONE, ">$file") or
