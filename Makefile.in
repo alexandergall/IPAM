@@ -9,24 +9,107 @@ GEN-ZONES = ipam-gen-zones
 SERIALIZE = ipam-create-cache
 DUMP = xmllint --xinclude
 DIFF = diff
+DATE = date --rfc-3339=seconds
 
 CONFIRM = y
+comma = ,
 
-define FIND_XML_FILES
-	$(filter-out %/schemas.xml, $(shell $(FIND) $(1) -type f -name "*.xml"))
-endef
+### Whenever the database is unlocked, it us dumped into
+### this RCS-controlled file to provide something like a
+### transaction-based history of the entire database.
+IPAM_ARCHIVE := ipam_archive
+IPAM_ARCHIVE_RCS := RCS/$(IPAM_ARCHIVE),v
 
 ### Directories and files that contain <networks> tags.
 ### Used as prerequisites for validate and construction
 ### of automatic includes.
 NETWORKS_DIRS := $(wildcard net-*/networks)
-NETWORKS_FILES := $(call FIND_XML_FILES,$(NETWORKS_DIRS))
+NETWORKS_FILES = $(call FIND_XML_FILES,$(NETWORKS_DIRS))
+
 ### Directories and files that contain parts of the
 ### address map.  Used as prerequisites for validate.
 BLOCKS_DIRS := $(wildcard net-*/blocks-*)
-BLOCKS_FILES := $(call FIND_XML_FILES,$(BLOCKS_DIRS))
+BLOCKS_FILES = $(call FIND_XML_FILES,$(BLOCKS_DIRS))
 
 .DEFAULT_GOAL = zones
+
+#### Macro definitions
+
+### Find all regular files in the given path with names
+### ending in .xml
+define FIND_XML_FILES
+$(filter-out %/schemas.xml,$(shell $(FIND) $(1) -type f -name "*.xml"))
+endef
+
+define log
+	echo "$(1) $(2)" 1>&2
+endef
+
+### Write a string to stderr, prefixed with "==> "
+define msg
+$(call log,==>,$(1))
+endef
+
+define err
+$(call log,!!>,$(1))
+endef
+
+### Return the name of the user's effective UID
+define self
+`id -un`
+endef
+
+### Returns the user name of the owner of the given file
+define owner_of
+`stat --format="%U" $(1)`
+endef
+
+### When called without argument, return a zero exit status if
+### the lock file exists, non-zero otherwise.  If called with
+### an argument, it is also checked whether the lock file is
+### owned by the given user.
+define locked
+[ -f .lock ] && \
+	if [ -n "$(1)" ]; then \
+		[ $(call owner_of,.lock) == $(call self) ]; \
+	else \
+		true; \
+	fi
+endef 
+
+### Return a zero exit status if the lock file exists and
+### is owned by the user.
+define locked_by_self
+$(call locked,$(call self))
+endef
+
+### Exit with status 1 unless the the lock file exists and is
+### owned by the user.
+define fail_unless_locked_by_self
+$(call locked_by_self) || \
+	{ $(call err,You must lock the database to perform this operation.); \
+	  $(MAKE) --silent show-lock; \
+	  exit 1; }
+endef
+
+#### Target definitions
+
+### Generate includes for files that contain network
+### definitions.  A file can be excluded by creating
+### a file with '.no-auto-include' appended to the name
+### in the same directory.
+.networks-auto-include: $(NETWORKS_DIRS)
+	@umask 002; \
+	set -e; \
+	$(call msg,Generating automatic includes in file $@); \
+	$(call fail_unless_locked_by_self); \
+	echo "<!-- Automatically generated file.  DO NOT EDIT. -->" > $@; \
+	echo "<networks xmlns:xi=\"http://www.w3.org/2001/XInclude\">" >>$@; \
+	for file in $(NETWORKS_FILES); do \
+		[ -f $${file}.no-auto-include ] || \
+			echo "  <xi:include href=\"$$file\"/>" >>$@; \
+	done; \
+	echo "</networks>" >>$@
 
 ### Validate ipam.xml aginst the schema.  It appears that only James Clark
 ### is able to write a working RelaxNG vlaidator :(  The validator based on
@@ -39,58 +122,91 @@ BLOCKS_FILES := $(call FIND_XML_FILES,$(BLOCKS_DIRS))
 ### unconditionally run it on the file when jing has failed (it does not
 ### produce any output if the document is well-formed).
 validate: .networks-auto-include ipam.xml alternatives.xml address-map.xml iid.xml zones.xml $(NETWORKS_FILES) $(BLOCKS_FILES)
-	@echo "<Validating database>" 1>&2
-	@set +e; \
+	@umask 002; \
+	set -e; \
+	$(call msg,Validating database); \
+	$(call fail_unless_locked_by_self); \
 	if ! $(JING) -c schemas/ipam.rnc ipam.xml; then \
 		$(DUMP) --noout ipam.xml; \
 		exit 1; \
-	fi
-	@umask 002; echo `id -u -n` > $@
+	fi; \
+	echo $(call self) > $@
 
-.networks-auto-include: $(NETWORKS_DIRS)
-	@umask 002; \
-	set -e; \
-	echo "<Generating automatic includes in file $@>"; \
-	echo "<!-- Automatically generated file.  DO NOT EDIT. -->" > $@; \
-	echo "<networks xmlns:xi=\"http://www.w3.org/2001/XInclude\">" >>$@; \
-	for file in $(NETWORKS_FILES); do \
-		[ -f $${file}.no-auto-include ] || \
-			echo "  <xi:include href=\"$$file\"/>" >>$@; \
-	done; \
-	echo "</networks>" >>$@
-
+### Dump the database as a single XML file.  This can fail
+### if the database requires validation and the user doesn't
+### own the lock.
 dump: validate
 	@$(DUMP) ipam.xml
 
-cache: .ipam.cache
+### Dump the newest version from the archive.  This will always
+### succeed.
+dump-from-archive:
+	@co -p $(IPAM_ARCHIVE) 2>/dev/null
 
+### Create a cache of the database by serializing the Perl IPAM
+### object.  This is only allowed when the user is holding the lock.
+### The ipam-* commands always operate on the cache (but see the
+### comment of the target cache-maybe-rebuild for more details), never
+### on the database itself.  This way, lookups do not interfere with
+### pending changes when the database is locked and being edited by
+### somebody.  The target "cache" is an alias for ".ipam.cache".
+cache: .ipam.cache
 .ipam.cache: validate
 	@umask 002; \
 	set -e; \
-	echo "<Rebuilding cache file $(CURDIR)/$@>" 1>&2; \
-	[ -f $@.lock ] && \
-	  { user=`stat --format="%U" $@.lock`; \
-	    echo "Cache is being rebuilt by user $$user, retry later"; \
-	    exit 1; }; \
+	$(call msg,Rebuilding cache file $(CURDIR)/$@); \
+	$(call fail_unless_locked_by_self); \
 	cleanup() { \
 		trap - INT TERM EXIT; \
-		rm -f $@.lock; \
+		rm -f $@.new; \
 	}; \
 	trap cleanup INT TERM EXIT; \
-	touch $@.lock; \
-	$(SERIALIZE) $@; \
-	if [ `stat --format="%a" $@` != 664 ]; then \
-		chmod 664 $@; \
+	touch $@.new; \
+	$(SERIALIZE) $@.new; \
+	if [ `stat --format="%a" $@.new` != 664 ]; then \
+		chmod 664 $@.new; \
+	fi; \
+	mv $@.new $@
+
+### This target is built by regular ipam-* commands before they try to
+### access the cache. It checks whether the target "cache" is up to
+### date.  If it is, no output is generated and make exits with status
+### zero.  Otherwise, there are three possible outcomes.
+
+###  1. If the database is locked by the user, the cache is rebuilt.
+###  2. If the database is locked by a different user, the cache
+###     is not updated and make exists with status zero.  It is assumed
+###     that a regular edit is in progress and the cache will eventually
+###     be rebuilt by the user holding the lock. The calling ipam-* 
+###     command uses the old cache.
+###  3. If the database is not locked but the cache is not up to date,
+###     something has gone wrong during the last lock/unlock cycle and a
+###     message is displayed to alert the user.
+cache-maybe-rebuild:
+	@set -e; \
+	if ! $(MAKE) -q cache; then \
+		if $(call locked_by_self); then \
+			$(MAKE) cache; \
+		elif ! $(call locked); then \
+			$(call err,Cache needs to be rebuilt but the database is unlocked.); \
+			$(call msg,Use 'make info' for details.); \
+			exit 0; \
+		fi; \
 	fi
 
 ### Show the differences of all currently checked-out files which have
 ### been modified since the last successful validation.
 diff:
-	@$(FIND) . -name "*.xml" -newer validate -exec rcsdiff -u {} \;
+	@[ -f validate ] || exit 0; \
+	for f in $(call FIND_XML_FILES,. -newer validate); do \
+		out=`rcsdiff -u $$f 2>&1`; \
+		[ $$? -gt 0 ] && total="$$total$$out"; \
+	done; \
+	[ -n "$$total" ] && echo "$$total" || true
 
-### Show locked files
+### Show files that are locked by RCS
 LOCKER =
-show-locks:
+show-rcs-locks:
 	@for d in `find . -type d -name RCS`; do\
 		rlog -L -R $(LOCKER) $$d/*;\
 	done | while read rcsfile; do\
@@ -98,56 +214,182 @@ show-locks:
 		echo `echo $$rcsfile | sed -e 's/RCS\///;s/,v$$//;s/\.\///'` "locked by user $$1 (revision $$2)";\
 	done
 
-show-my-locks:
-	@$(MAKE) --silent show-locks LOCKER="-l$(USER)"
+### Show only the user's own RCS locks
+show-my-rcs-locks:
+	@$(MAKE) --silent show-rcs-locks LOCKER="-l$(USER)"
 
-lock-dns:
-	@umask 002; \
-	set -e; \
-	[ -f .dns-lock ] && \
-		{ user=`stat --format="%U" .dns-lock`; \
-		  echo "Already locked by user $$user."; \
-		  if [ -s .dns-lock ]; then \
-		  	echo -n "Reason: "; \
-			cat .dns-lock; \
-		  fi; \
-		  exit 1; }; \
-	$(MAKE) --silent .dns-lock
-
-lock-dns-msg: export LOCK_MSG=1
-lock-dns-msg: lock-dns
-
-unlock-dns:
+### Display information about the current state of the database.
+info:
 	@set -e; \
-	[ -f .dns-lock ] || \
-		{ echo "No lock has been set."; \
-		  exit 1; }; \
-	user=`stat --format="%U" .dns-lock`; \
-	if [ $$user == `id -un` -o "$(FORCE)" == "y" ]; then \
-		rm -f .dns-lock; \
-		echo "The DNS lock has been succefully removed."; \
-	else \
-		echo "The lock is owned by user $$user."; \
-		echo 'Use "make unlock-dns FORCE=y" to override.'; \
+	[ -z "$(INFO_NO_SHOW_LOCK)" ] && $(MAKE) --silent show-lock || true; \
+	rcs_locks=`$(MAKE) --silent show-rcs-locks`; \
+	if [ -n "$$rcs_locks" ]; then \
+		$(call err,There are RCS locks on the following files:); \
+		echo "$$rcs_locks"; \
+	fi; \
+	if ! $(MAKE) -q validate; then \
+		$(call err,The database has not been validated after the last modification. Use 'make' or 'make validate' to fix.); \
+		[ -f validate ] && files="$(call FIND_XML_FILES,. -newer validate)" || true; \
+		if [ -n "$$files" ]; then \
+			$(call msg,The following files contain pending changes:); \
+			echo "$$files"; \
+		fi; \
+		diff=`$(MAKE) --silent diff 2>&1` || true; \
+		if [ -n "$$diff" ]; then \
+			$(call msg,The following changes are not yet commited to RCS:); \
+			echo; \
+			echo "$$diff"; \
+		fi; \
+	fi; \
+	if ! $(MAKE) -q .ipam.cache; then \
+		$(call err,The IPAM cache needs to be rebuilt. Use 'make' or 'make cache' to fix.); \
+	fi; \
+	if ! $(MAKE) -q zones; then \
+		$(call err,The DNS zones need to be updated. Use 'make' to fix.); \
 	fi
 
-.dns-lock:
+### Try to lock the database.  This will fail if either the database is
+### already locked by somebody else or if it is not in a clean state.
+lock:
+	@[ -f .lock ] && \
+		{ locker="$(call owner_of,.lock)"; \
+		  [ $$locker == $(call self) ] && locker="you"; \
+		  $(call msg,Already locked by $$locker.); \
+		  if [ -s .lock ]; then \
+		  	echo -n "Reason: "; \
+			cat .lock; \
+		  fi; \
+		  exit 1; }; \
+	$(MAKE) --silent .lock
+
+### Lock the database even when it is not clean
+lock-force: export LOCK_FORCE=y
+lock-force: lock
+
+### Let the locker deposite a message that is displayed to
+### users trying to lock the database when it is already locked.
+lock-msg: export LOCK_MSG=1
+lock-msg: lock
+
+.lock:
 	@umask 002; \
 	set -e; \
-	touch $@; \
+	status=`$(MAKE) --silent info INFO_NO_SHOW_LOCK=y 2>&1`; \
+	if [ -n "$$status" -a -z "$(LOCK_FORCE)" ]; then \
+		$(call err,The database is unlocked but it is not in a clean state.  Use 'make info' for more details.); \
+		$(call msg,Try to clear this condition or use 'make lock-force' to obtain the lock.); \
+		$(call msg,Use 'make lock-history' to review the latest locking/unlocking operations.); \
+		exit 1; \
+	fi; \
 	cleanup() { \
 		trap - INT TERM EXIT; \
-		echo "Abortet, lock has not been set."; \
+		$(call msg,Abortet. Lock has not been set.); \
 		rm -f $@; \
 	}; \
 	trap cleanup INT TERM EXIT; \
-	echo "Locking out changes to the DNS."; \
+	touch $@; \
+	$(call msg,The database is now locked by you.); \
 	if [ -n "$(LOCK_MSG)" ]; then \
-		echo "Please provide a brief message that will be displayed to other users when they attempt to acquire the lock while you own it."; \
-		echo "Type CTRL-d to commit, CTRL-c to abort."; \
+		$(call msg,Please provide a brief message that will be displayed to other users when they attempt to acquire the lock while you own it.); \
+		$(call msg,Type CTRL-d to commit$(comma) CTRL-c to abort.); \
 		cat >$@; \
 	fi; \
-	trap - INT TERM EXIT
+	if [ ! -f $(IPAM_ARCHIVE_RCS) ]; then \
+		$(call msg,Initializing IPAM archive.); \
+		$(MAKE) --silent dump >$(IPAM_ARCHIVE); \
+		ci -t-"IPAM archive" $(IPAM_ARCHIVE); \
+	fi; \
+	trap - INT TERM EXIT; \
+	echo "`$(DATE)` L `id -un`" >>.lock-history; \
+
+### Steal the lock from a another user.  This effectively forces an
+### unlock followed by a lock for the current user.
+lock-steal:
+	@umask 002; \
+	set -e; \
+	if [ ! -f .lock ]; then \
+		$(call msg,The database is not locked.); \
+		exit 1; \
+	fi; \
+	locker=`stat --format="%U" .lock`; \
+	self=`id -un`; \
+	if [ $$locker == $$self ]; then \
+		$(call msg,You already own the lock.); \
+		exit 1; \
+	fi; \
+	$(call msg,Stealing the lock from $$locker.); \
+	echo "`$(DATE)` U $$self $$locker" >>.lock-history; \
+	echo "`$(DATE)` L `id -un`" >>.lock-history; \
+	rm -f .lock; \
+	touch .lock
+
+### Unlock the database.  This only succeeds if
+###
+###   - All files are checked in
+###   - The database is valid
+###   - The cache has been rebuilt
+###   - The DNS has been updated
+###
+### The database is considered to be clean if all
+### conditions are met.  In that case, a dump of
+### the database is checked into the archive to
+### provide a sort of transaction-level change log
+### of the entire database.
+unlock:
+	@set -e; \
+	[ -f .lock ] || \
+		{ $(call msg,The database is not locked.); \
+		  exit 1; }; \
+	locker="$(call owner_of,.lock)"; \
+	self="$(call self)"; \
+	if [ $$locker == $$self ]; then \
+		status=`$(MAKE) --silent info INFO_NO_SHOW_LOCK=y 2>&1`; \
+		if [ -n "$$status" ]; then \
+			$(call err,The lock cannot be removed unless the IPAM is in a clean state.); \
+			$(call msg,Use 'make info' for more details.); \
+			exit 1; \
+		fi; \
+		$(call msg,Updating IPAM archive.); \
+		lock_history="`$(DATE)` U $$self $$locker"; \
+		co -l $(IPAM_ARCHIVE); \
+		$(MAKE) --silent dump >$(IPAM_ARCHIVE); \
+		ci -m"$$lock_history" $(IPAM_ARCHIVE); \
+		echo "$$lock_history" >>.lock-history; \
+		rm -f .lock; \
+		$(call msg,The database is now unlocked.); \
+	else \
+		$(call msg,The lock is owned by user $$locker.); \
+	fi
+
+### Show the last few entries of the lock history.
+LOCK_HISTORY = 10
+lock-history:
+	@[ -f .lock-history ] || \
+		{ $(call msg,Lock history not available.); \
+		  exit 1; }; \
+	tail -$(LOCK_HISTORY) .lock-history | while read date time mode user owner; do \
+		echo -n $$date $$time; \
+		if [ "$$mode" == "L" ]; then \
+			echo " locked by $$user"; \
+		elif [ "$$user" == "$$owner" ]; then \
+			echo " unlocked by $$user"; \
+		else \
+			echo " stolen from $$owner by $$user"; \
+		fi; \
+	done
+
+show-lock:
+	@set -e; \
+	if [ -f .lock ]; then \
+		user="$(call owner_of,.lock)"; \
+		$(call msg,The database is locked by user $$user.); \
+		if [ -s .lock ]; then \
+		  	echo -n "Reason: "; \
+			cat .lock; \
+		fi; \
+	else \
+		$(call msg,The database is unlocked.); \
+	fi
 
 ### Generate zone file snippets and rebuild the zones.  The snippets
 ### are written to a local directory and compared to the d.ipam files
@@ -155,21 +397,11 @@ unlock-dns:
 ### generated files are installed only if they differ from the old ones
 ### to avoid building the zone unnecessarily.
 zones: zones/.stamp
-
-zones/.stamp: validate zones/.links.stamp
+zones/.stamp: .ipam.cache zones/.links.stamp
 	@umask 002; \
 	set -e; \
-	if [ -f .dns-lock ]; then \
-		user=`stat --format="%U" $@`; \
-		if [ `id -un` != $$user ]; then \
-			echo "Changes to the DNS have been locked out by user $$user on `stat --format="%y" .dns-lock`."; \
-			if [ -s .dns-lock ]; then \
-				echo -n "Reason: "; \
-				cat .dns-lock; \
-			fi; \
-			exit 1; \
-		fi; \
-	fi; \
+	$(call msg,Generating zone files.); \
+	$(call fail_unless_locked_by_self); \
 	cleanup() { \
 		trap - INT TERM EXIT; \
 		rm -f zones/*new; \
@@ -177,23 +409,23 @@ zones/.stamp: validate zones/.links.stamp
 	}; \
 	trap cleanup INT TERM EXIT; \
 	$(GEN-ZONES) --suffix=new; \
-	echo "<Detecting zones that need to be updated>"; \
+	$(call msg,Detecting zones that need to be updated); \
 	for file_n in `$(FIND) zones -name "*new"`; do \
 		file=`echo $$file_n | sed -e 's/new$$//'`; \
 		zone=`basename $$file`; \
 		if [ ! -f $$file ]; then \
-			echo "Rebuilding missing zone file $$file"; \
+			$(call msg,Rebuilding missing zone file $$file); \
 			if [ -f $${file}install ]; then \
 				 cp $${file}install $$file; \
 			else \
 				[ -h $${file}install ] || \
-					echo "Zone $$zone (file $$file) requires manual update on the name server"; \
+					$(call msg,Zone $$zone (file $$file) requires manual update on the name server.); \
 				cp $$file_n $$file; \
 			fi; \
 		fi; \
 		if ! $(DIFF) --unified=5 $$file $$file_n >zones/diffs; then \
 			files="$$files $$file"; \
-			echo "Changes in zone $$zone:"; \
+			$(call msg,Changes in zone $$zone:); \
 			echo; \
 			cat zones/diffs; \
 			echo; \
@@ -205,18 +437,18 @@ zones/.stamp: validate zones/.links.stamp
 				read -N1 -s -p 'Press "c" to confirm these changes or "a" to abort.' ans; \
 				case $$ans in \
 					[cC] ) echo; break;; \
-					[aA] ) echo; echo "Aborting.  No changes have been made to the DNS."; exit 1;; \
+					[aA] ) echo; $(call msg,Aborted.  No changes have been made to the DNS.); exit 1;; \
 				esac; \
 				echo; \
 			done; \
 		fi; \
-		echo "<Committing changes to the DNS>"; \
+		$(call msg,Committing changes to the DNS); \
 		for file in $$files; do \
 			rm -f $$file; \
 			mv $${file}new $$file; \
 			if [ ! -h $${file}install ]; then \
 				zone=`basename $$file`; \
-				echo "Zone $$zone (file $$file) requires manual update on the name server"; \
+				$(call msg,Zone $$zone (file $$file) requires manual update on the name server.); \
 				continue; \
 			fi; \
 			dest=`readlink $${file}install`; \
@@ -228,7 +460,7 @@ zones/.stamp: validate zones/.links.stamp
 			if [ -f $$dir/Makefile ]; then \
 				(cd $$dir && make); \
 			else \
-				echo "Skipping $$dir: Makefile missing."; \
+				$(call msg,Skipping $$dir: Makefile missing.); \
 			fi; \
 		done; \
 	fi; \
