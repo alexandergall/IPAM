@@ -3,7 +3,7 @@
 #### Description:   IPAM::Registry class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Registry.pm,v 1.3 2012/09/04 06:42:06 gall Exp gall $
+#### RCS $Id: Registry.pm,v 1.4 2013/01/10 08:25:07 gall Exp gall $
 package IPAM::Registry;
 our $name = 'Generic registry';
 
@@ -130,7 +130,7 @@ undef after all Things have been processed.  An anonymous subroutine
 can be passed to sort the Things in a particular order.  The
 subroutine is called within a sort() statement like this:
 
-  sort { $sorter($a, $b) }
+  sort { &$sorter($a, $b) }
 
 where $a and $b are references to L<IPAM::Thing> objects.  By default,
 no sorting is done.  To sort by name, for example, one would use
