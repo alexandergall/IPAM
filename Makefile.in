@@ -50,6 +50,7 @@ define msg
 $(call log,==>,$(1))
 endef
 
+### Write a string to stderr, prefixed with "!!> "
 define err
 $(call log,!!>,$(1))
 endef
@@ -59,7 +60,7 @@ define self
 `id -un`
 endef
 
-### Returns the user name of the owner of the given file
+### Return the user name of the owner of the given file
 define owner_of
 `stat --format="%U" $(1)`
 endef
@@ -68,7 +69,7 @@ endef
 ### the lock file exists, non-zero otherwise.  If called with
 ### an argument, it is also checked whether the lock file is
 ### owned by the given user.
-define locked
+define locked_p
 [ -f .lock ] && \
 	if [ -n "$(1)" ]; then \
 		[ $(call owner_of,.lock) == $(call self) ]; \
@@ -79,15 +80,16 @@ endef
 
 ### Return a zero exit status if the lock file exists and
 ### is owned by the user.
-define locked_by_self
-$(call locked,$(call self))
+define locked_by_self_p
+$(call locked_p,$(call self))
 endef
 
 ### Exit with status 1 unless the the lock file exists and is
 ### owned by the user.
 define fail_unless_locked_by_self
-$(call locked_by_self) || \
-	{ $(call err,You must lock the database to perform this operation.); \
+$(call locked_by_self_p) || \
+	{ $(call err,The database must be locked by you to perform this operation.); \
+	  $(call msg,Use 'make lock' to request the lock.); \
 	  $(MAKE) --silent show-lock; \
 	  exit 1; }
 endef
@@ -101,7 +103,7 @@ endef
 .networks-auto-include: $(NETWORKS_DIRS)
 	@umask 002; \
 	set -e; \
-	$(call msg,Generating automatic includes in file $@); \
+	$(call msg,Generating automatic includes.); \
 	$(call fail_unless_locked_by_self); \
 	echo "<!-- Automatically generated file.  DO NOT EDIT. -->" > $@; \
 	echo "<networks xmlns:xi=\"http://www.w3.org/2001/XInclude\">" >>$@; \
@@ -120,11 +122,11 @@ endef
 ### error messages if the document is not well-formed and the error is in a
 ### file that is XIncluded.  xmllint is better in this respect so we
 ### unconditionally run it on the file when jing has failed (it does not
-### produce any output if the document is well-formed).
+### produce any output if the document isn't well-formed).
 validate: .networks-auto-include ipam.xml alternatives.xml address-map.xml iid.xml zones.xml $(NETWORKS_FILES) $(BLOCKS_FILES)
 	@umask 002; \
 	set -e; \
-	$(call msg,Validating database); \
+	$(call msg,Validating database.); \
 	$(call fail_unless_locked_by_self); \
 	if ! $(JING) -c schemas/ipam.rnc ipam.xml; then \
 		$(DUMP) --noout ipam.xml; \
@@ -154,7 +156,7 @@ cache: .ipam.cache
 .ipam.cache: validate
 	@umask 002; \
 	set -e; \
-	$(call msg,Rebuilding cache file $(CURDIR)/$@); \
+	$(call msg,Rebuilding cache.); \
 	$(call fail_unless_locked_by_self); \
 	cleanup() { \
 		trap - INT TERM EXIT; \
@@ -185,9 +187,9 @@ cache: .ipam.cache
 cache-maybe-rebuild:
 	@set -e; \
 	if ! $(MAKE) -q cache; then \
-		if $(call locked_by_self); then \
+		if $(call locked_by_self_p); then \
 			$(MAKE) cache; \
-		elif ! $(call locked); then \
+		elif ! $(call locked_p); then \
 			$(call err,Cache needs to be rebuilt but the database is unlocked.); \
 			$(call msg,Use 'make info' for details.); \
 			exit 0; \
@@ -311,15 +313,15 @@ lock-steal:
 		$(call msg,The database is not locked.); \
 		exit 1; \
 	fi; \
-	locker=`stat --format="%U" .lock`; \
-	self=`id -un`; \
+	locker=$(call owner_of,.lock); \
+	self=$(call self); \
 	if [ $$locker == $$self ]; then \
 		$(call msg,You already own the lock.); \
 		exit 1; \
 	fi; \
 	$(call msg,Stealing the lock from $$locker.); \
 	echo "`$(DATE)` U $$self $$locker" >>.lock-history; \
-	echo "`$(DATE)` L `id -un`" >>.lock-history; \
+	echo "`$(DATE)` L $$self" >>.lock-history; \
 	rm -f .lock; \
 	touch .lock
 
@@ -374,7 +376,7 @@ lock-history:
 		elif [ "$$user" == "$$owner" ]; then \
 			echo " unlocked by $$user"; \
 		else \
-			echo " stolen from $$owner by $$user"; \
+			echo " lock stolen from $$owner by $$user"; \
 		fi; \
 	done
 
@@ -409,7 +411,7 @@ zones/.stamp: .ipam.cache zones/.links.stamp
 	}; \
 	trap cleanup INT TERM EXIT; \
 	$(GEN-ZONES) --suffix=new; \
-	$(call msg,Detecting zones that need to be updated); \
+	$(call msg,Detecting zones that need to be updated.); \
 	for file_n in `$(FIND) zones -name "*new"`; do \
 		file=`echo $$file_n | sed -e 's/new$$//'`; \
 		zone=`basename $$file`; \
