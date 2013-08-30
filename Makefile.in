@@ -20,14 +20,13 @@ comma = ,
 IPAM_ARCHIVE := ipam_archive
 IPAM_ARCHIVE_RCS := RCS/$(IPAM_ARCHIVE),v
 
-### Directories and files that contain <networks> tags.
-### Used as prerequisites for validate and construction
-### of automatic includes.
+### Files that contain <networks> tags.  Used as prerequisites for
+### validate and construction of automatic includes.
 NETWORKS_DIRS := $(wildcard net-*/networks)
 NETWORKS_FILES = $(call FIND_XML_FILES,$(NETWORKS_DIRS))
 
-### Directories and files that contain parts of the
-### address map.  Used as prerequisites for validate.
+### Files that contain parts of the address map.  Used as
+### prerequisites for validate.
 BLOCKS_DIRS := $(wildcard net-*/blocks-*)
 BLOCKS_FILES = $(call FIND_XML_FILES,$(BLOCKS_DIRS))
 
@@ -38,7 +37,7 @@ BLOCKS_FILES = $(call FIND_XML_FILES,$(BLOCKS_DIRS))
 ### Find all regular files in the given path with names
 ### ending in .xml
 define FIND_XML_FILES
-$(filter-out %/schemas.xml,$(shell $(FIND) $(1) -type f -name "*.xml"))
+$(if $(1),$(filter-out %/schemas.xml,$(shell $(FIND) $(1) -type f -name "*.xml")))
 endef
 
 define log
@@ -90,40 +89,107 @@ define fail_unless_locked_by_self
 $(call locked_by_self_p) || \
 	{ $(call err,The database must be locked by you to perform this operation.); \
 	  $(call msg,Use 'make lock' to request the lock.); \
-	  $(MAKE) --silent show-lock; \
 	  exit 1; }
 endef
 
 #### Target definitions
 
-### Generate includes for files that contain network
-### definitions.  A file can be excluded by creating
-### a file with '.no-auto-include' appended to the name
-### in the same directory.
-.networks-auto-include: $(NETWORKS_DIRS)
+### Generate includes for files that contain network definitions.  A
+### file can be excluded by creating a file with '.no-auto-include'
+### appended to the name in the same directory.  To detect when this
+### target needs to be remade is a bit tricky.  Naively, we only need
+### to use all directories that contain these files as prerequisites,
+### because the mtime of the directory is updated when files are added
+### or deleted.  However, there are lots of false positives due to RCS
+### checkin/checkouts or the manipulation of editor backup files.  So,
+### instead of making .networks-auto-include itself a prerequisite of
+### the validate target, we use the MD5 mechanism just like with the
+### other prerequisites of validate.
+.networks-auto-include: $(NETWORKS_DIRS) $(BLOCK_DIRS)
 	@umask 002; \
 	set -e; \
-	$(call msg,Generating automatic includes.); \
-	$(call fail_unless_locked_by_self); \
-	echo "<!-- Automatically generated file.  DO NOT EDIT. -->" > $@; \
-	echo "<networks xmlns:xi=\"http://www.w3.org/2001/XInclude\">" >>$@; \
+	cleanup() { \
+		trap - INT TERM EXIT; \
+		rm -f $@.new; \
+	}; \
+	trap cleanup INT TERM EXIT; \
+	echo "<!-- Automatically generated file.  DO NOT EDIT. -->" > $@.new; \
+	echo "<networks xmlns:xi=\"http://www.w3.org/2001/XInclude\">" >>$@.new; \
 	for file in $(NETWORKS_FILES); do \
 		[ -f $${file}.no-auto-include ] || \
-			echo "  <xi:include href=\"$$file\"/>" >>$@; \
+			echo "  <xi:include href=\"$$file\"/>" >>$@.new; \
 	done; \
-	echo "</networks>" >>$@
+	echo "</networks>" >>$@.new; \
+	mv $@.new $@
 
 ### Validate ipam.xml aginst the schema.  It appears that only James Clark
 ### is able to write a working RelaxNG vlaidator :(  The validator based on
 ### libxml2 is buggy, which makes XML::LibXML::RelaxNG unusable as well.
 ### For now, we perform validation outside of the IPAM Perl module using
 ### jing.
+
 ### While jing is great at validation, it doesn't produce particularly useful
 ### error messages if the document is not well-formed and the error is in a
 ### file that is XIncluded.  xmllint is better in this respect so we
 ### unconditionally run it on the file when jing has failed (it does not
 ### produce any output if the document isn't well-formed).
-validate: .networks-auto-include ipam.xml alternatives.xml address-map.xml iid.xml zones.xml $(NETWORKS_FILES) $(BLOCKS_FILES)
+
+### We use a slightly more elaborate mechanism to detect changes, or,
+### rather, non-changes for some of the prerequisites.  The problem is
+### that an RCS cechkout followed by a chekin without actual changes
+### still modifies the mtime timestamp of the file, which causes the
+### validate target (and all targets depending on it) to have to be
+### remade, which is a bit annoying.  To solve this problem, we use
+### the MD5 hash of the files to detect actual changes instead.
+
+### The MD5 sum of a file is stored in a subdirectory to avoid
+### cluttering up the original directory with lots of files.  The name
+### of this file is the same as that on which it depends with the
+### suffix ".md5" added.  It is this file that is used as prerequisite
+### for validate rather than the original file.  A pattern rule is
+### used to rebuild this file when the original file was changed.  The
+### magic lies in the recipe of this pattern rule, which updates the
+### .md5 file only if the MD5 hash has actually changed.
+
+### Unfortunately, this trick breaks the logic of the targets
+### cache-maybe-rebuild and info that try to detect pending changes by
+### using "make -q", because "-q" does not execute any recipes (and
+### hence bypasses the magic of the .md5 pattern rule).  This can be
+### fixed by adding two more things.  One thing is to remove the
+### prerequisite of the pattern rule %.md5 when "make -q" is used.
+### This is accomplished by unsetting the variable REBUILD_MD5 (which
+### is set by default).  The other thing is to execute the original
+### pattern rule separately to still update the MD5 sums, which is done
+### with a separate rule used only for this purpose.  The entire
+### procedure then looks like "make update-md5 && make -q <whatever>".
+
+### This macro completes with an exit status of 0 if the given 
+### target needs to be remade, >0 otherwise
+define needs_update_p
+! { $(MAKE) --silent update-md5 && $(MAKE) -q $(1) REBUILD_MD5=; }
+endef
+
+VALIDATE_PREREQS := .networks-auto-include ipam.xml alternatives.xml address-map.xml zones.xml iid.xml $(NETWORKS_FILES) $(BLOCKS_FILES)
+VALIDATE_PREREQS_MD5 := $(foreach file,$(VALIDATE_PREREQS),$(dir $(file))md5/$(addsuffix .md5,$(notdir $(file))))
+
+REBUILD_MD5 = 1
+
+### This template is used to create a pattern rule for md5 files for
+### each directory that contains prerequisites for validate.  This is
+### necessary because the md5 files live in subdirectories and this
+### dependency cannot be expressed by a regular pattern rule.
+define MD5_template
+$(1)/md5/%.md5: $$(if $$(REBUILD_MD5),$(dir)/%)
+	$$(eval CHECKSUM := $$(shell md5sum $$<))
+	@[ -d $(1)/md5 ] || { umask 002; mkdir $(1)/md5; }
+	$$(if $$(filter-out $$(shell cat $$@ 2>/dev/null),$$(CHECKSUM)),@umask 002; echo $$(CHECKSUM) > $$@)
+endef
+
+$(foreach dir,. $(NETWORKS_DIRS) $(BLOCKS_DIRS),$(eval $(call MD5_template,$(dir))))
+
+update-md5: $(VALIDATE_PREREQS_MD5)
+
+validate: $(VALIDATE_PREREQS_MD5)
 	@umask 002; \
 	set -e; \
 	$(call msg,Validating database.); \
@@ -186,7 +252,7 @@ cache: .ipam.cache
 ###     message is displayed to alert the user.
 cache-maybe-rebuild:
 	@set -e; \
-	if ! $(MAKE) -q cache; then \
+	if $(call needs_update_p,cache); then \
 		if $(call locked_by_self_p); then \
 			$(MAKE) cache; \
 		elif ! $(call locked_p); then \
@@ -229,12 +295,17 @@ info:
 		$(call err,There are RCS locks on the following files:); \
 		echo "$$rcs_locks"; \
 	fi; \
-	if ! $(MAKE) -q validate; then \
+	if $(call needs_update_p,validate); then \
 		$(call err,The database has not been validated after the last modification. Use 'make' or 'make validate' to fix.); \
-		[ -f validate ] && files="$(call FIND_XML_FILES,. -newer validate)" || true; \
+		if [ -f validate ]; then \
+			for md5 in $(VALIDATE_PREREQS_MD5); do \
+				[ $$md5 -nt validate ] && \
+					files="$$files`basename $$md5 .md5`\n"; \
+			done; \
+		fi; \
 		if [ -n "$$files" ]; then \
 			$(call msg,The following files contain pending changes:); \
-			echo "$$files"; \
+			echo -e "$$files"; \
 		fi; \
 		diff=`$(MAKE) --silent diff 2>&1` || true; \
 		if [ -n "$$diff" ]; then \
@@ -243,10 +314,10 @@ info:
 			echo "$$diff"; \
 		fi; \
 	fi; \
-	if ! $(MAKE) -q .ipam.cache; then \
+	if $(call needs_update_p,.ipam.cache); then \
 		$(call err,The IPAM cache needs to be rebuilt. Use 'make' or 'make cache' to fix.); \
 	fi; \
-	if ! $(MAKE) -q zones; then \
+	if $(call needs_update_p,zones); then \
 		$(call err,The DNS zones need to be updated. Use 'make' to fix.); \
 	fi
 
@@ -302,7 +373,9 @@ lock-msg: lock
 		ci -t-"IPAM archive" $(IPAM_ARCHIVE); \
 	fi; \
 	trap - INT TERM EXIT; \
-	echo "`$(DATE)` L `id -un`" >>.lock-history; \
+	mode="L"; \
+	[ -n "$(LOCK_FORCE)" ] && mode="F"; \
+	echo "`$(DATE)` $$mode `id -un`" >>.lock-history; \
 
 ### Steal the lock from a another user.  This effectively forces an
 ### unlock followed by a lock for the current user.
@@ -326,12 +399,12 @@ lock-steal:
 	touch .lock
 
 ### Unlock the database.  This only succeeds if
-###
+
 ###   - All files are checked in
 ###   - The database is valid
 ###   - The cache has been rebuilt
 ###   - The DNS has been updated
-###
+
 ### The database is considered to be clean if all
 ### conditions are met.  In that case, a dump of
 ### the database is checked into the archive to
@@ -353,15 +426,20 @@ unlock:
 		fi; \
 		$(call msg,Updating IPAM archive.); \
 		lock_history="`$(DATE)` U $$self $$locker"; \
+		rcs -NPREV: $(IPAM_ARCHIVE); \
 		co -l $(IPAM_ARCHIVE); \
 		$(MAKE) --silent dump >$(IPAM_ARCHIVE); \
 		ci -m"$$lock_history" $(IPAM_ARCHIVE); \
+		rcs -NHEAD: $(IPAM_ARCHIVE); \
 		echo "$$lock_history" >>.lock-history; \
 		rm -f .lock; \
 		$(call msg,The database is now unlocked.); \
 	else \
 		$(call msg,The lock is owned by user $$locker.); \
 	fi
+
+last-transaction:
+	rcsdiff -u -rPREV -rHEAD $(IPAM_ARCHIVE) || true
 
 ### Show the last few entries of the lock history.
 LOCK_HISTORY = 10
@@ -373,6 +451,8 @@ lock-history:
 		echo -n $$date $$time; \
 		if [ "$$mode" == "L" ]; then \
 			echo " locked by $$user"; \
+		elif [ "$$mode" == "F" ]; then \
+			echo " forced lock by $$user"; \
 		elif [ "$$user" == "$$owner" ]; then \
 			echo " unlocked by $$user"; \
 		else \
