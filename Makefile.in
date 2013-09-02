@@ -105,7 +105,7 @@ endef
 ### instead of making .networks-auto-include itself a prerequisite of
 ### the validate target, we use the MD5 mechanism just like with the
 ### other prerequisites of validate.
-.networks-auto-include: $(NETWORKS_DIRS) $(BLOCK_DIRS)
+.networks-auto-include: $(NETWORKS_DIRS) $(BLOCKS_DIRS)
 	@umask 002; \
 	set -e; \
 	cleanup() { \
@@ -178,11 +178,17 @@ REBUILD_MD5 = 1
 ### each directory that contains prerequisites for validate.  This is
 ### necessary because the md5 files live in subdirectories and this
 ### dependency cannot be expressed by a regular pattern rule.
+
+### Note: the checksum is calculated only once when the $(eval) clause
+### is expanded by make.  The recipe of the target is emtpy unless the
+### checksum has actually changed.
 define MD5_template
 $(1)/md5/%.md5: $$(if $$(REBUILD_MD5),$(dir)/%)
 	$$(eval CHECKSUM := $$(shell md5sum $$<))
-	@[ -d $(1)/md5 ] || { umask 002; mkdir $(1)/md5; }
-	$$(if $$(filter-out $$(shell cat $$@ 2>/dev/null),$$(CHECKSUM)),@umask 002; echo $$(CHECKSUM) > $$@)
+	$$(if $$(filter-out $$(shell cat $$@ 2>/dev/null),$$(CHECKSUM)),\
+	@umask 002; \
+	[ -d $(1)/md5 ] || mkdir $(1)/md5; \
+	echo $$(CHECKSUM) > $$@)
 endef
 
 $(foreach dir,. $(NETWORKS_DIRS) $(BLOCKS_DIRS),$(eval $(call MD5_template,$(dir))))
