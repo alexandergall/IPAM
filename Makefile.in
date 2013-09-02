@@ -371,6 +371,7 @@ lock-msg: lock
 		$(call msg,Initializing IPAM archive.); \
 		$(MAKE) --silent dump >$(IPAM_ARCHIVE); \
 		ci -t-"IPAM archive" $(IPAM_ARCHIVE); \
+		rcs -nHEAD: -nPREV: $(IPAM_ARCHIVE); \
 	fi; \
 	trap - INT TERM EXIT; \
 	mode="L"; \
@@ -439,7 +440,8 @@ unlock:
 	fi
 
 last-transaction:
-	rcsdiff -u -rPREV -rHEAD $(IPAM_ARCHIVE) || true
+	@rcsdiff -u -rPREV -rHEAD $(IPAM_ARCHIVE) || true
+	@rlog -rHEAD $(IPAM_ARCHIVE) | awk '/^-----/,/^=====/'
 
 ### Show the last few entries of the lock history.
 LOCK_HISTORY = 10
