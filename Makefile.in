@@ -10,6 +10,7 @@ SERIALIZE = ipam-create-cache
 DUMP = xmllint --xinclude
 DIFF = diff
 DATE = date --rfc-3339=seconds
+MD5 = md5sum
 
 CONFIRM = y
 comma = ,
@@ -182,18 +183,39 @@ REBUILD_MD5 = 1
 ### Note: the checksum is calculated only once when the $(eval) clause
 ### is expanded by make.  The recipe of the target is emtpy unless the
 ### checksum has actually changed.
+
+### For efficiency, checksums are only actually calculated if the file
+### is newer than it's .md5 file.  If many files have been touched
+### without actual changes, the number of MD5 calculations that need
+### to be done for each invocation of make increases unnecessarily.
+### The list of these files can be shown by building the target
+### "show-regen-md5".  The target "regen-md5" regenerates the files.
 define MD5_template
 $(1)/md5/%.md5: $$(if $$(REBUILD_MD5),$(dir)/%)
-	$$(eval CHECKSUM := $$(shell md5sum $$<))
+	$$(eval CHECKSUM := $$(shell $(MD5) $$<))
 	$$(if $$(filter-out $$(shell cat $$@ 2>/dev/null),$$(CHECKSUM)),\
-	@umask 002; \
-	[ -d $(1)/md5 ] || mkdir $(1)/md5; \
-	echo $$(CHECKSUM) > $$@)
+		@umask 002; \
+		[ -d $(1)/md5 ] || mkdir $(1)/md5; \
+		echo $$(CHECKSUM) > $$@ \
+,\
+		$$(if $$(REGEN_MD5),\
+			$$(if $$(REGEN_MD5_SHOW),\
+				@echo "$$@" \
+,\
+				@echo "Regenerating $$@."; \
+				$(MD5) $$< > $$@ \
+			)\
+		)\
+	)
 endef
 
 $(foreach dir,. $(NETWORKS_DIRS) $(BLOCKS_DIRS),$(eval $(call MD5_template,$(dir))))
 
 update-md5: $(VALIDATE_PREREQS_MD5)
+regen-md5: REGEN_MD5 := 1
+regen-md5: update-md5
+show-regen-md5: REGEN_MD5_SHOW := 1
+show-regen-md5: regen-md5 
 
 validate: $(VALIDATE_PREREQS_MD5)
 	@umask 002; \
