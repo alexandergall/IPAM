@@ -468,9 +468,28 @@ unlock:
 		$(call msg,The lock is owned by user $$locker.); \
 	fi
 
-last-transaction:
-	@rcsdiff -u -rPREV -rHEAD $(IPAM_ARCHIVE) || true
-	@rlog -rHEAD $(IPAM_ARCHIVE) | awk '/^-----/,/^=====/'
+### Show the diffs between two consecutive versions in the archive and
+### the log message of the newer of the two versions.  This allows to
+### review the changes for each transaction. "transaction-last" is
+### equivalent to "transaction-0". "transaction-n" shows the n-th
+### transaction back in history.
+TRANSACTION_V1 = PREV
+TRANSACTION_V2 = HEAD
+transaction-last:
+	@rcsdiff -u -r$(TRANSACTION_V1) -r$(TRANSACTION_V2) $(IPAM_ARCHIVE) || true
+	@rlog -r$(TRANSACTION_V2) $(IPAM_ARCHIVE) | awk '/^-----/,/^=====/'
+
+transaction-%:
+	@set -e; \
+	head=`rlog -rHEAD -h ipam_archive | awk '$$1 == "head:" { print $$2}' | cut -d. -f2`; \
+	v1=$$(($$head - $*)); \
+	v2=$$(($$v1 - 1)); \
+	if [ $$v1 -gt 0 -a $$v2 -gt 0 ] && echo $* | egrep '^[0-9]+$$' >/dev/null; then \
+		$(MAKE) --no-print-directory transaction-last \
+			TRANSACTION_V1=1.$$v1 TRANSACTION_V2=1.$$v2; \
+	else \
+		$(call msg,Invalid transaction identifier: $*); \
+	fi
 
 ### Show the last few entries of the lock history.
 LOCK_HISTORY = 10
