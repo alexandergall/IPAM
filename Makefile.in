@@ -434,11 +434,12 @@ lock-steal:
 ###   - The cache has been rebuilt
 ###   - The DNS has been updated
 
-### The database is considered to be clean if all
-### conditions are met.  In that case, a dump of
-### the database is checked into the archive to
-### provide a sort of transaction-level change log
-### of the entire database.
+### The database is considered to be clean if all conditions are met.
+### In that case, a dump of the database is checked into the archive
+### to provide a sort of transaction-level change log of the entire
+### database.  The RCS version is bumped even if the database hasn't
+### changed in order to reflect every unlock operation in the RCS log
+### of the archive.
 unlock:
 	@set -e; \
 	[ -f .lock ] || \
@@ -458,7 +459,7 @@ unlock:
 		rcs -NPREV: $(IPAM_ARCHIVE); \
 		co -l $(IPAM_ARCHIVE); \
 		$(MAKE) --silent dump >$(IPAM_ARCHIVE); \
-		ci -m"$$lock_history" $(IPAM_ARCHIVE); \
+		ci -f -m"$$lock_history" $(IPAM_ARCHIVE); \
 		rcs -NHEAD: $(IPAM_ARCHIVE); \
 		echo "$$lock_history" >>.lock-history; \
 		rm -f .lock; \
@@ -582,7 +583,7 @@ zones/.stamp: .ipam.cache zones/.links.stamp
 ### IPAM.  Each zone has associated with it a symbolic link named
 ### zones/<zone>.install, which points to the actual d.ipam file in
 ### the proper zone directory.
-zones/.links.stamp: zones.xml
+zones/.links.stamp: md5/zones.xml.md5
 	@umask 002; \
 	set -o pipefail; \
 	set -e; \
