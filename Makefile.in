@@ -484,7 +484,7 @@ transaction-%:
 		rcsdiff -u -r$$r2 -r$$r1 $(IPAM_ARCHIVE) || true; \
 		rlog -r$$r1 $(IPAM_ARCHIVE) | awk '/^-----/,/^=====/'; \
 	else \
-		$(call msg,Invalid transaction identifier: $*); \
+		$(call err,Index $* out of range or not numeric.); \
 	fi
 
 ### Show the last few entries of the lock history.
