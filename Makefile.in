@@ -89,7 +89,7 @@ endef
 define fail_unless_locked_by_self
 $(call locked_by_self_p) || \
 	{ $(call err,The database must be locked by you to perform this operation.); \
-	  $(call msg,Use 'make lock' to request the lock.); \
+	  $(call msg,Use 'make lock' to acquire the lock.); \
 	  exit 1; }
 endef
 
