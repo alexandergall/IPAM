@@ -399,7 +399,6 @@ lock-msg: lock
 		$(call msg,Initializing IPAM archive.); \
 		$(MAKE) --silent dump >$(IPAM_ARCHIVE); \
 		ci -t-"IPAM archive" $(IPAM_ARCHIVE); \
-		rcs -nHEAD: -nPREV: $(IPAM_ARCHIVE); \
 	fi; \
 	trap - INT TERM EXIT; \
 	mode="L"; \
@@ -456,11 +455,9 @@ unlock:
 		fi; \
 		$(call msg,Updating IPAM archive.); \
 		lock_history="`$(DATE)` U $$self $$locker"; \
-		rcs -NPREV: $(IPAM_ARCHIVE); \
 		co -l $(IPAM_ARCHIVE); \
 		$(MAKE) --silent dump >$(IPAM_ARCHIVE); \
 		ci -f -m"$$lock_history" $(IPAM_ARCHIVE); \
-		rcs -NHEAD: $(IPAM_ARCHIVE); \
 		echo "$$lock_history" >>.lock-history; \
 		rm -f .lock; \
 		$(call msg,The database is now unlocked.); \
@@ -470,23 +467,22 @@ unlock:
 
 ### Show the diffs between two consecutive versions in the archive and
 ### the log message of the newer of the two versions.  This allows to
-### review the changes for each transaction. "transaction-last" is
-### equivalent to "transaction-0". "transaction-n" shows the n-th
-### transaction back in history.
-TRANSACTION_V1 = PREV
-TRANSACTION_V2 = HEAD
-transaction-last:
-	@rcsdiff -u -r$(TRANSACTION_V1) -r$(TRANSACTION_V2) $(IPAM_ARCHIVE) || true
-	@rlog -r$(TRANSACTION_V2) $(IPAM_ARCHIVE) | awk '/^-----/,/^=====/'
-
+### review the changes for each transaction. The stem of this pattern
+### rule is used as an index relative to the current version, i.e. 0
+### is the current version representing the most recent transaction, 1
+### is the penultimate transaction etc.
 transaction-%:
 	@set -e; \
-	head=`rlog -rHEAD -h ipam_archive | awk '$$1 == "head:" { print $$2}' | cut -d. -f2`; \
+	set -- `rlog -h ipam_archive | awk '$$1 == "head:" { split($$2,out,/\./); print out[1], out[2]}'`; \
+	trunk=$$1; \
+	head=$$2; \
 	v1=$$(($$head - $*)); \
 	v2=$$(($$v1 - 1)); \
 	if [ $$v1 -gt 0 -a $$v2 -gt 0 ] && echo $* | egrep '^[0-9]+$$' >/dev/null; then \
-		$(MAKE) --no-print-directory transaction-last \
-			TRANSACTION_V1=1.$$v1 TRANSACTION_V2=1.$$v2; \
+		r1=$$trunk.$$v1; \
+		r2=$$trunk.$$v2; \
+		rcsdiff -u -r$$r1 -r$$r2 $(IPAM_ARCHIVE) || true; \
+		rlog -r$$r1 $(IPAM_ARCHIVE) | awk '/^-----/,/^=====/'; \
 	else \
 		$(call msg,Invalid transaction identifier: $*); \
 	fi
