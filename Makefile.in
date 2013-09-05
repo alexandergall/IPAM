@@ -476,15 +476,20 @@ transaction-%:
 	set -- `rlog -h ipam_archive | awk '$$1 == "head:" { split($$2,out,/\./); print out[1], out[2]}'`; \
 	trunk=$$1; \
 	head=$$2; \
+	echo $* | egrep '^[0-9]+$$' >/dev/null || \
+		{ $(call err,Index \"$*\" not numeric.); \
+		  exit 1; \
+		}; \
 	v1=$$(($$head - $*)); \
 	v2=$$(($$v1 - 1)); \
-	if [ $$v1 -gt 0 -a $$v2 -gt 0 ] && echo $* | egrep '^[0-9]+$$' >/dev/null; then \
+	if  [ $$v1 -gt 0 -a $$v2 -gt 0 ] ; then \
 		r1=$$trunk.$$v1; \
 		r2=$$trunk.$$v2; \
 		rcsdiff -u -r$$r2 -r$$r1 $(IPAM_ARCHIVE) || true; \
 		rlog -r$$r1 $(IPAM_ARCHIVE) | awk '/^-----/,/^=====/'; \
 	else \
-		$(call err,Index $* out of range (max: $$(($$head-2))) or not numeric.); \
+		$(call err,Index $* out of range (max: $$(($$head-2)))); \
+		exit 1; \
 	fi
 
 ### Show the last few entries of the lock history.
