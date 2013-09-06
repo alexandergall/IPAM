@@ -534,7 +534,8 @@ sub _register_zones($$@) {
     if ($directory) {
       $directory = join('/', $base, $directory) unless $directory =~ /^\//;
     }
-    my $zone = IPAM::Zone->new($node, $name, $directory);
+    my $zone = eval { IPAM::Zone->new($node, $name, $directory) }
+      or $self->_die_at($node, $@);
     eval { $self->{zone_r}->add($zone) } or $self->_die_at($node, $@);
     $zone->ttl(_ttl($node, $self->{ttl}));
   }
