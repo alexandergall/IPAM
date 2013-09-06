@@ -613,13 +613,7 @@ zones/.links.stamp: md5/zones.xml.md5
 	trap cleanup INT TERM EXIT; \
 	mkdir zones.new; \
 	$(GEN-ZONES) --conf | while read zone dir; do \
-		if [ -n "$$dir" ]; then \
-			if [ -h zones/$${zone}install ]; then \
-				cp -p -d zones/$${zone}install zones.new; \
-			else \
-				ln -s $$dir/d.ipam zones.new/$${zone}install; \
-			fi; \
-		fi; \
+		[ -n "$$dir" ] && ln -s $$dir/d.ipam zones.new/$${zone}install; \
 		[ -f zones/$$zone ] && cp -p zones/$$zone zones.new || true; \
 	done; \
 	mv zones zones.old; \
