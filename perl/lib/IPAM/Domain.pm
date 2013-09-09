@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.16 2013/03/12 16:17:12 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.17 2013/08/15 13:36:36 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -60,6 +60,7 @@ L<IPAM::Zone> object.
 
 sub fqdn($) {
   my ($self) = @_;
+  $self->name() or return($self->{zone}->name());
   return(join('.', $self->name(), $self->{zone}->name()));
 }
 
@@ -85,6 +86,9 @@ C<$type> is 'CNAME' but other records (including CNAME) already exist.
 =item *
 C<$type> is not 'CNAME' but a CNAME record already exists
 
+=item *
+C<$type> is a 'CNAME' and the Domain Object is at the apex of the zone.
+
 =back
 
 If the record is not of type CNAME and the RRset already exists, it is
@@ -107,7 +111,7 @@ sub add_rr($$$$$$@) {
 	&& not $self->exists_rrset($type)) {
       ## We're trying to add a CNAME but at least one non-CNAME
       ## RR already exists.  Try to make the error message more
-      ## meaningful by including informationa about one of
+      ## meaningful by including information about one of
       ## these existing records.
       my ($file, $line);
     TYPE:
@@ -130,6 +134,8 @@ sub add_rr($$$$$$@) {
 	  .(defined $file ? " (conflicts with definition at "
 	    ."$file, $line)" : '')."\n";
     }
+    ($type eq 'CNAME' and not $self->name()) and
+      die $self->fqdn().": CNAME not allowed at zone apex\n";
     if ($self->exists_rrset($type)) {
       if ($type eq 'CNAME') {
 	my ($file, $line) = @{(@{$self->{types}{$type}{rr}})[0]->{nodeinfo}};
