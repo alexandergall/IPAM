@@ -250,14 +250,7 @@ sub load($$) {
     $schema->validate($ipam);
   }
 
-  ### Add the name of $file to the DOM as an element node called 'file'
-  ### with attribute name="$file".  This allows _nodeinfo() to access the
-  ### top-level file name from the DOM alone.
   my $root = $ipam->getDocumentElement();
-  my $file_element = $ipam->createElement('file');
-  $file_element->setAttribute('name', $file);
-  $root->appendChild($file_element);
-
   $self->{domain} = $root->findvalue('domain');
   $self->{domain} .= '.' unless $self->{domain} =~ /\.$/;
 
@@ -352,54 +345,10 @@ sub load($$) {
 
 ### Return the name of the file and the line number within this file
 ### where a particular node is defined in the original XML file.
-###
-### Moves up the DOM tree looking for an <include> tag to determine
-### whether the definition of a particular node is part of a file that
-### has been treated by XInclude.  If found, the name of the file is
-### extracted from the "href" attribute and returned to the caller.
-### Otherwise, the top-level file is returned (the name of that file
-### has been added as a <file> element by IPAM::load() to be
-### accessible through the DOM).
-###
-### During XInclude processing, a pair of <include> elements are added
-### just before (previous sibling) and after (next sibling) the
-### top-level included element.  The former has an attribute called
-### "href" which is a copy of the attribute of the original
-### <xi:include> element.  The latter <include> element has no
-### attributes.  We need to find the closest enclosing include while
-### skipping includes that cover a sibling element. Note that these
-### "include" elements are not accessible by XPath.
 sub _nodeinfo($) {
   my ($node) = @_;
   defined $node or return();
-  my ($file, $path) = fileparse($node->findvalue('/ipam-base/file/@name'));
-  my $line = $node->line_number();
-
- NODE:
-  while ($node) {
-    my $sibling = $node;
-    my $skip = 0;
-    while ($sibling = $sibling->previousSibling()) {
-      next unless ($sibling->nodeName() eq 'include');
-      if ($skip) {
-	$skip = 0;
-	next;
-      }
-      foreach my $attr ($sibling->attributes()) {
-	if ($attr->nodeName() eq 'href') {
-	  $file = $attr->nodeValue();
-	  last NODE;
-	}
-      }
-      ## We've entered an include that covers a sibling node from
-      ## "below".  We need to ignore the matching include element that
-      ## contains the href for it.
-      $skip = 1;
-    }
-  } continue {
-    $node = $node->parentNode();
-  }
-  return($path.$file, $line);
+  return($node->baseURI(), $node->line_number());
 }
 
 ### Returns the value of a particular attribute of the given node if
