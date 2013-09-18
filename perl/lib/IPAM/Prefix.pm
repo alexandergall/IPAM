@@ -3,7 +3,7 @@
 #### Description:   IPAM::Prefix class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Prefix.pm,v 1.6 2012/12/10 15:26:48 gall Exp gall $
+#### RCS $Id: Prefix.pm,v 1.7 2013/02/07 11:00:41 gall Exp gall $
 
 package IPAM::Prefix;
 use IPAM;
@@ -338,10 +338,13 @@ registered.
 
 sub add($$$) {
   my ($self, $prefix_new) = @_;
+  my $ip_new = $prefix_new->ip();
   my $next_prefix = $self->iterator(undef, $prefix_new->af());
   while (my $prefix = $next_prefix->()) {
-    (($prefix->contains($prefix_new) or $prefix_new->contains($prefix))
-	and $prefix->ip() != $prefix_new->ip()) and
+    my $ip = $prefix->ip();
+    my $r = ($ip->masklen() <=> $ip_new->masklen());
+    ((($r < 0 and $ip->contains($ip_new)) or ($r > 0 and $ip_new->contains($ip)))
+      and $ip != $ip_new) and
 	die $self->{name}.": can't add prefix ".$prefix_new->name()
 	.", overlaps with ".$prefix->name()."\n";
   }
