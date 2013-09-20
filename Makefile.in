@@ -529,6 +529,9 @@ show-lock:
 ### currently installed in the proper zone directories.  The newly
 ### generated files are installed only if they differ from the old ones
 ### to avoid building the zone unnecessarily.
+define plural
+`[ $(1) -eq 0 -o $(1) -gt 1 ] && echo $(2)s || echo $(2)`
+endef
 zones: zones/.stamp
 zones/.stamp: .ipam.cache zones/.links.stamp
 	@umask 002; \
@@ -541,7 +544,7 @@ zones/.stamp: .ipam.cache zones/.links.stamp
 		rm -f zones/diffs; \
 	}; \
 	trap cleanup INT TERM EXIT; \
-	$(GEN-ZONES) --suffix=new; \
+	$(GEN-ZONES) --quiet --suffix=new; \
 	$(call msg,Detecting zones that need to be updated.); \
 	for file_n in `$(FIND) zones -name "*new"`; do \
 		file=`echo $$file_n | sed -e 's/new$$//'`; \
@@ -556,7 +559,7 @@ zones/.stamp: .ipam.cache zones/.links.stamp
 				cp $$file_n $$file; \
 			fi; \
 		fi; \
-		if ! $(DIFF) --unified=5 $$file $$file_n >zones/diffs; then \
+		if ! $(DIFF) --unified=0 $$file $$file_n >zones/diffs; then \
 			files="$$files $$file"; \
 			$(call msg,Changes in zone $$zone:); \
 			echo; \
@@ -564,6 +567,10 @@ zones/.stamp: .ipam.cache zones/.links.stamp
 			echo; \
 		fi; \
 	done; \
+	proc_count=0; \
+	update_count=0; \
+	manual_count=0; \
+	skipped_count=0; \
 	if [ -n "$$files" ]; then \
 		if [ "$(CONFIRM)" == "y" ]; then \
 			while true; do \
@@ -575,13 +582,15 @@ zones/.stamp: .ipam.cache zones/.links.stamp
 				echo; \
 			done; \
 		fi; \
-		$(call msg,Committing changes to the DNS); \
+		$(call msg,Committing changes to the DNS.); \
 		for file in $$files; do \
+			((++proc_count)); \
 			rm -f $$file; \
 			mv $${file}new $$file; \
 			if [ ! -h $${file}install ]; then \
 				zone=`basename $$file`; \
 				$(call msg,Zone $$zone (file $$file) requires manual update on the name server.); \
+				((++manual_count)); \
 				continue; \
 			fi; \
 			dest=`readlink $${file}install`; \
@@ -592,11 +601,16 @@ zones/.stamp: .ipam.cache zones/.links.stamp
 			dir=`dirname $$dest`; \
 			if [ -f $$dir/Makefile ]; then \
 				(cd $$dir && make); \
+				((++update_count)); \
 			else \
 				$(call msg,Skipping $$dir: Makefile missing.); \
+				((++skipped_count)); \
 			fi; \
 		done; \
 	fi; \
+	$(call msg,Update completed. $$proc_count $(call plural,$$proc_count,zone) processed$(comma) $$update_count commited.); \
+	[ $$manual_count -gt 0 ] && $(call msg,$$manual_count $(call plural,$$manual_count,zone) marked for manual update.); \
+	[ $$skipped_count -gt 0 ] && $(call msg,$$skipped_count $(call plural,$$skipped_count,zone) not updated due to missing makefile.); \
 	touch $@
 
 ### The zone snippets are written to the directory "zones" within the
