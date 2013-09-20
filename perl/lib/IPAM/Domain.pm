@@ -3,7 +3,7 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.17 2013/08/15 13:36:36 gall Exp gall $
+#### RCS $Id: Domain.pm,v 1.18 2013/09/09 08:25:56 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
@@ -169,21 +169,22 @@ sub add_rr($$$$$$@) {
 				      nodeinfo => [ @nodeinfo ] });
 }
 
-=item C<print($FILEH, $indent, $annotate)>
+=item C<print($FILEH, $indent, $annotate, $repeat_owner)>
 
-$domain->print(\*STDOUT, 0);
+$domain->print(\*STDOUT);
 
 Print all RRsets in valid (but not canonical) master file syntax to
 the filehandle referred by C<$FILEH>.  If C<$indent> is an integer,
 that number of spaces is prepended to each output line. If
 C<$annotate> is true, each RR is accompanied with a comment containing
 the file name and line number of the IPAM XML element from which the
-data was derived.
+data was derived.  If C<$repeat_owner> is a true value, the owner name
+of a RR is repeated on every line.
 
 =cut
 
 sub print($$$$) {
-  my ($self, $FILE, $n, $annotate) = @_;
+  my ($self, $FILE, $n, $annotate, $repeat_owner) = @_;
   my $name = $self->name() ? $self->name() : '@';
   my $indent = (defined $n and $n =~ /^\d+$/) ? ' 'x$n : '';
   foreach my $key (qw/types types_i/) {
@@ -211,9 +212,12 @@ sub print($$$$) {
 	    print $FILE (" ; $file:$line");
 	}
 	print $FILE "\n";
-	## The owner name is only printed for the first RR unless
-	## it happens to be commented out ("inactive").
-	$rr->{dns} and $name = '';
+	## If $repeat_owner is true, print the owner name for every
+	## record.  Otherwise, it is printed only for the first record
+	## unless the record is inactive.  Without this last
+	## condition, the owner name would be missing completely if
+	## the very first RR happens to be inactive.
+	$name = '' if ($rr->{dns} and not $repeat_owner);
       }
     }
   }
