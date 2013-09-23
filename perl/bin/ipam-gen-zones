@@ -13,7 +13,8 @@ use Getopt::Long;
 use lib join('/', $base_dir, 'lib/perl5');
 use IPAM 0.01;
 
-my %opt = ( 'repeat-owner' => 1 );
+my %opt = ( 'suffix' => '',
+	  );
 my @zones;
 my $zones_dir = "$base_dir/zones";
 
