@@ -603,7 +603,8 @@ zones/.stamp: .ipam.cache zones/.links.stamp
 				(cd $$dir && make); \
 				((++update_count)); \
 			else \
-				$(call msg,Skipping $$dir: Makefile missing.); \
+				zone=`basename $$file`; \
+				$(call msg,Zone $$zone: Makefile missing in $$dir.); \
 				((++skipped_count)); \
 			fi; \
 		done; \
