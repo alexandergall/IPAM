@@ -5,7 +5,7 @@ SHELL = /bin/bash
 
 JING = java -Dorg.apache.xerces.xni.parser.XMLParserConfiguration=org.apache.xerces.parsers.XIncludeParserConfiguration -jar /usr/share/java/jing.jar
 FIND = find
-GEN-ZONES = ipam-gen-zones
+GEN-ZONES = ipam-gen-zones --quiet --repeat-owner
 SERIALIZE = ipam-create-cache
 DUMP = xmllint --xinclude
 DIFF = diff
@@ -544,7 +544,7 @@ zones/.stamp: .ipam.cache zones/.links.stamp
 		rm -f zones/diffs; \
 	}; \
 	trap cleanup INT TERM EXIT; \
-	$(GEN-ZONES) --quiet --suffix=new; \
+	$(GEN-ZONES) --suffix=new; \
 	$(call msg,Detecting zones that need to be updated.); \
 	for file_n in `$(FIND) zones -name "*new"`; do \
 		file=`echo $$file_n | sed -e 's/new$$//'`; \
