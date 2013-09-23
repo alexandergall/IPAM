@@ -611,7 +611,7 @@ zones/.stamp: .ipam.cache zones/.links.stamp
 	fi; \
 	$(call msg,Update completed. $$proc_count $(call plural,$$proc_count,zone) processed$(comma) $$update_count commited.); \
 	[ $$manual_count -gt 0 ] && $(call msg,$$manual_count $(call plural,$$manual_count,zone) marked for manual update.); \
-	[ $$skipped_count -gt 0 ] && $(call msg,$$skipped_count $(call plural,$$skipped_count,zone) not updated due to missing makefile.); \
+	[ $$skipped_count -gt 0 ] && $(call msg,$$skipped_count $(call plural,$$skipped_count,zone) not updated due to missing Makefile.); \
 	touch $@
 
 ### The zone snippets are written to the directory "zones" within the
