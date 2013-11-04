@@ -3,7 +3,6 @@
 #### Description:   IPAM::AddressMap class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: AddressMap.pm,v 1.1 2012/07/12 08:08:43 gall Exp gall $
 
 package IPAM::AddressMap;
 use IPAM::Thing;

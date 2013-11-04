@@ -3,7 +3,6 @@
 #### Description:   IPAM::Zone class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Zone.pm,v 1.4 2013/01/16 15:11:59 gall Exp gall $
 
 package IPAM::Zone;
 use IPAM::Thing;

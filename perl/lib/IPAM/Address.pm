@@ -3,7 +3,6 @@
 #### Description:   IPAM::Address class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Address.pm,v 1.4 2012/09/04 12:59:40 gall Exp gall $
 
 package IPAM::Address;
 use IPAM::Prefix;

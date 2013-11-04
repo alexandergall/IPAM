@@ -3,7 +3,6 @@
 #### Description:   IPAM::Network class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Network.pm,v 1.9 2013/01/16 15:11:04 gall Exp gall $
 
 package IPAM::Network;
 use IPAM::Thing;

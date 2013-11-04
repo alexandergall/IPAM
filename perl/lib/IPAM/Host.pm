@@ -3,7 +3,6 @@
 #### Description:   IPAM::Host class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Host.pm,v 1.3 2013/02/06 13:30:42 gall Exp gall $
 
 package IPAM::Host;
 use IPAM::Thing;

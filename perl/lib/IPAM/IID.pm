@@ -3,7 +3,6 @@
 #### Description:   IPAM::IID class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: IID.pm,v 1.6 2013/01/16 15:22:36 gall Exp gall $
 
 package IPAM::IID;
 our @ISA = qw(IPAM::Thing);

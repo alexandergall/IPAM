@@ -3,7 +3,7 @@
 #### Description:   IPAM::Registry class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Registry.pm,v 1.4 2013/01/10 08:25:07 gall Exp gall $
+
 package IPAM::Registry;
 our $name = 'Generic registry';
 

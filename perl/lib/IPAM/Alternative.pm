@@ -3,7 +3,7 @@
 #### Description:   IPAM::Alternative class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Sep 10 2012
-#### RCS $Id: Alternative.pm,v 1.2 2013/01/16 15:21:49 gall Exp gall $
+
 package IPAM::Alternative;
 our @ISA = qw(IPAM::Thing);
 

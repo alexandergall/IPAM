@@ -3,7 +3,6 @@
 #### Description:   IPAM::Prefix class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Prefix.pm,v 1.8 2013/09/18 09:26:59 gall Exp gall $
 
 package IPAM::Prefix;
 use IPAM;

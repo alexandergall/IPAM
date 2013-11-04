@@ -3,7 +3,7 @@
 #### Description:   IPAM::Thing class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Thing.pm,v 1.10 2013/01/16 15:09:43 gall Exp gall $
+
 package IPAM::Thing;
 
 =head1 NAME

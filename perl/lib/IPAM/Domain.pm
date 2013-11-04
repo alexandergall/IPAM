@@ -3,7 +3,6 @@
 #### Description:   IPAM::Domain class
 #### Author:        Alexander Gall <gall@switch.ch>
 #### Created:       Jun 5 2012
-#### RCS $Id: Domain.pm,v 1.18 2013/09/09 08:25:56 gall Exp gall $
 
 package IPAM::Domain;
 our @ISA = qw(IPAM::Thing);
