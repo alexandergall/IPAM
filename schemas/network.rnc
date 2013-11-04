@@ -3,7 +3,6 @@
 # ## Description:   RelaxNG schema for the IPAM <networks> element
 # ## Author:        Alexander Gall <gall@switch.ch>
 # ## Created:       Sep 4 2012
-# ## RCS $Id: network.rnc,v 1.13 2012/09/13 07:28:01 gall Exp gall $
 # ##
 datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
 namespace a = "http://relaxng.org/ns/compatibility/annotations/1.0"

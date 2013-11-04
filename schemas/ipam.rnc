@@ -3,7 +3,6 @@
 # ## Description:   RelaxNG schema for the IPAM ipam-base element
 # ## Author:        Alexander Gall gall@switch.ch
 # ## Created:       Sep 4 2012
-# ## RCS $Id: ipam.rnc,v 1.8 2012/09/10 15:29:36 gall Exp gall $
 # ##
 datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
 namespace xi = "http://www.w3.org/2001/XInclude"

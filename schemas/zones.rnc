@@ -3,7 +3,6 @@
 # ## Description:   RelaxNG schema for the IPAM <zones> element
 # ## Author:        Alexander Gall <gall@switch.ch>
 # ## Created:       Sep 4 2012
-# ## RCS $Id: zones.rnc,v 1.5 2012/09/10 15:30:19 gall Exp gall $
 # ##
 datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
 

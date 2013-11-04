@@ -3,7 +3,6 @@
 # ## Description:   RelaxNG schema for the IPAM <alternatives> element
 # ## Author:        Alexander Gall <gall@switch.ch>
 # ## Created:       Sep 4 2012
-# ## RCS $Id: alternatives.rnc,v 1.3 2012/09/10 15:28:10 gall Exp gall $
 # ##
 datatypes xsd = "http://www.w3.org/2001/XMLSchema-datatypes"
 
