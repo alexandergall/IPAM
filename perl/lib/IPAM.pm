@@ -134,7 +134,7 @@ use XML::LibXML 1.70;
 use NetAddr::IP 4.028 qw(:lower);
 use NetAddr::IP::Util qw(add128 ipv6_n2x);
 use File::Basename;
-use Data::Serializer;
+use Data::Serializer::Raw;
 use IPAM::Thing;
 use IPAM::Registry;
 use IPAM::Alternative;
@@ -176,7 +176,7 @@ my %registries = ( IPAM::REG_ZONE => { key => 'zone_r',
 					      'IPAM::Alternative::Registry' },
 		 );
 
-my %serializer_opts = ( serializer => 'Storable', encoding => 'hex' );
+my %serializer_opts = ( serializer => 'Storable' );
 
 =head1 CLASS METHODS
 
@@ -214,7 +214,7 @@ created by the C<cache()> instance method.
 sub new_from_cache($$) {
   my ($class, $file) = @_;
   my $ipam;
-  my $serializer = Data::Serializer->new(%serializer_opts);
+  my $serializer = Data::Serializer::Raw->new(%serializer_opts);
   eval { $ipam = $serializer->retrieve($file) }
     or die "Loading database from cache file $file failed: $@";
   return($ipam);
@@ -378,7 +378,7 @@ without having to call the C<load()> method.
 
 sub cache($$) {
   my ($self, $file) = @_;
-  my $serializer = Data::Serializer->new(%serializer_opts);
+  my $serializer = Data::Serializer::Raw->new(%serializer_opts);
   eval { $serializer->store($self, $file) } or
     die "Creation of cache file $file failed: $@";
 }
@@ -716,7 +716,7 @@ sub _process_host_node($$$$) {
   ### is supposed to work.  Maybe it's just not supported by
   ### the RelaxNG validator used by XML::LibXML.
   if ($node->hasAttribute('dns')) {
-    $host->dns($node->find('@dns[.=string(true())]'));
+    $host->dns($node->find('@dns[.=string(true())]')->size() != 0);
   } else {
     $host->dns(1);
   }

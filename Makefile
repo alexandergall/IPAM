@@ -17,7 +17,7 @@ $(DIRS):
 	$(INSTALL) -m02775 -d $@
 
 install.perl: perl/Makefile
-	cd perl && make install
+	cd perl && make install INSTALL_BASE=$(INSTALL_DIR)
 
 perl/Makefile: perl/Makefile.PL
 	cd perl && perl Makefile.PL INSTALL_BASE=$(INSTALL_DIR)
