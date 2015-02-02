@@ -287,6 +287,7 @@ sub load($$) {
 				      IPAM::_nodeinfo($loc_node)) } or
        $self->_die_at($loc_node, $@));
     $network->description($network_node->findvalue('description'));
+    $network->ttl($network_node->getAttribute('ttl'));
 
     ### Find all stub-prefixes associated with the network.  A network
     ### must have at least one prefix and can't have more than one IPv4
@@ -700,13 +701,17 @@ sub _process_host_node($$$$) {
   eval { $host->set_tags($node->getAttribute('tag'), $network) }
     or $self->_die_at($node, $@);
   eval { $network->add_host($host) } or $self->_die_at($node, $@);
-  ## If the host has no TTL, inherit the TTL from the zone
+  ## If the host has no TTL, inherit the TTL from the network,
+  ## otherwise inherit from the zone
   my ($zone) = $self->{zone_r}->lookup_fqdn($host_fqdn);
   defined $zone or
     $self->_die_at($node, $host->name()
 		   .": the hostname cannot be associated with any "
 		   ."configured zone\n");
-  $host->ttl(_ttl($node, $zone->ttl()));
+  my $zone_ttl = $zone->ttl();
+  my $network_ttl = $network->ttl();
+  my $default_ttl = $network_ttl ? $network_ttl : $zone_ttl;
+  $host->ttl(_ttl($node, $default_ttl));
   if (my ($admin_ref, $domain) = ($host_fqdn =~ /^(\w+)-admin\.(.*)$/i)) {
     $self->{admin_check}{$host_fqdn} = join('.', $admin_ref, $domain);
   }

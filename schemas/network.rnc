@@ -18,6 +18,7 @@ network = element network {
    name,
    attribute xml:base { text }?,
    attribute tag { text }?,
+   ttl?,
    description?,
    element location { text }?,
    reserved,
