@@ -22,6 +22,11 @@ $ENV{REQUEST_METHOD} eq 'GET' or error_501();
 my @parms = $q->param();
 $parms[0] eq 'cmd' or error_400('Missing cmd parameter');
 shift(@parms);
+my @args;
+foreach my $parm (@parms) {
+  my $arg = $q->param($parm);
+  push(@args, "$parm".($arg ? "=$arg" : ''));
+}
 
 if ($q->param('cmd') eq 'dump') {
   $cmd = "cd $IPAM_BASE && make dump-from-archive";
@@ -35,7 +40,7 @@ open(OLDOUT, ">&STDOUT");
 open(OLDERR, ">&STDERR");
 open(STDOUT, '>&'.$handles[0]->fileno());
 open(STDERR, '>&'.$handles[1]->fileno());
-my $rc = system($cmd, @parms) & 0xffff;
+my $rc = system($cmd, @args) & 0xffff;
 open(STDOUT, ">&OLDOUT");
 open(STDERR, ">&OLDERR");
 close(OLDOUT);
@@ -59,8 +64,9 @@ if ($rc != 0) {
     }
   }
   error_400(sprintf("Command \"%s\" failed (%s)\n%s%s",
-		    $cmd.' '.join(' ', @parms), $reason,
-		    @{$output[0]}, @{$output[1]}));
+  		    $cmd.' '.join(' ', @parms), $reason,
+  		    join('', @{$output[0]}),
+  		    join('', @{$output[1]})));
 }
 print $q->header($content_type);
 print @{$output[0]};
