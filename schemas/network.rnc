@@ -67,8 +67,7 @@ host = element host {
       }* &
       element hosted-on {
          name,
-         ttl?,
-         [ a:defaultValue= "true" ] attribute check { xsd:boolean }?
+         ttl?
       }* &
       element rr {
          attribute type { text },

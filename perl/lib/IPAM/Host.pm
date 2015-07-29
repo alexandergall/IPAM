@@ -51,6 +51,7 @@ sub new($$$) {
   $self->{address_r} = IPAM::Address::Registry->new();
   $self->{alias_r} = IPAM::Registry->new();
   $self->{hosted_on_r} = IPAM::Registry->new();
+  $self->{hosting_r} = IPAM::Registry->new();
   return($self);
 }
 
@@ -225,6 +226,48 @@ of the host.
 sub hosted_on_registry($) {
   my ($self) = @_;
   return($self->{hosted_on_r});
+}
+
+=item C<add_hosting($host)
+
+  eval { $host->add_hosting($host) } or die $@;
+
+Adds the L<IPAM::Thing> object $host to the host's "hosting"
+registry. This registry collects the list of hosts that map to this
+host via a "hosted-on" attribute.
+
+=cut
+
+sub add_hosting($$) {
+  my ($self, $host) = @_;
+  $self->{hosting_r}->add($host);
+}
+
+=item C<hosting()>
+
+  my @hosts = $host->hosting();
+
+Returns the list of L<IPAM::Thing> objects in the host's "hosteding" registry.
+
+=cut
+
+sub hosting($) {
+  my ($self) = @_;
+  return($self->{hosting_r}->things());
+}
+
+=item C<hosting_registry()>
+
+  my $registry = $host->hosting_registry();
+
+Returns the L<IPAM::Registry> associated with the "hosting" registry
+of the host.
+
+=cut
+
+sub hosting_registry($) {
+  my ($self) = @_;
+  return($self->{hosting_r});
 }
 
 #### Registry for IPAM::Host objects

@@ -326,13 +326,20 @@ sub load($$) {
 		      ", isn't referenced anywhere");
   }
 
-  ### Check if <hosted-on> targets exist
-  foreach my $ref (@{$self->{hosted_on_check}}) {
-    exists $self->{host_cache}{lc($ref->{target}->name())} or
+  ### Register <hosted-on> targets
+  foreach my $ref (@{$self->{hosted_on}}) {
+    my $host = $self->{host_cache}{lc($ref->{target}->name())};
+    defined $host or
       $self->_die_at($ref->{target},
 		     $ref->{host}->name().": hosted-on host "
 		     .$ref->{target}->name()." does not exist");
+    ## The target can be referenced by a particular host multiple
+    ## times if the host is associated with multiple interfaces in
+    ## different IP subnets.
+    if (not $host->hosting_registry()->lookup($ref->{host}->name())) {
+      $host->add_hosting($ref->{host});
     }
+  }
 
   ### Check if "-admin" hosts exist without the host itself
   foreach my $admin (keys(%{$self->{admin_check}})) {
@@ -906,11 +913,8 @@ sub _process_host_node($$$$) {
     $hosted_on->ttl(_ttl($hosted_on_node, $host->ttl()));
     eval { $host->add_hosted_on($hosted_on) }
       or $self->_die_at($hosted_on_node, $@);
-    if (not $hosted_on_node->hasAttribute('check') or
-	$hosted_on_node->find('@check[.=string(true())]')) {
-      push(@{$self->{hosted_on_check}},
-	   { host => $host, target => $hosted_on });
-    }
+    push(@{$self->{hosted_on}},
+         { host => $host, target => $hosted_on });
     eval { $self->{zone_r}->add_rr($host_fqdn, $hosted_on->ttl(),
 				   'PTR', $hosted_on_fqdn, undef, $host->dns(),
 				   IPAM::_nodeinfo($hosted_on_node)) } or

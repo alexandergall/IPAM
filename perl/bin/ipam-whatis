@@ -134,6 +134,9 @@ sub name_info($$) {
 	  map { indent($indent+1, "It is hosted on ".$_->name()."\n");
 		$opt{recurse} and name_info($_->name(), $indent+2); }
 	    $host->hosted_on();
+	  map { indent($indent+1, "It is hosting ".$_->name()."\n");
+		$opt{recurse} and name_info($_->name(), $indent+2); }
+	    $host->hosting();
 	}
       }
     }
