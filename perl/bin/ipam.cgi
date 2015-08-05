@@ -32,6 +32,9 @@ if ($q->param('cmd') eq 'dump') {
   $cmd = "cd $IPAM_BASE && make dump-from-archive";
   $content_type = 'application/xml';
 } else {
+  if ($q->param('--json')) {
+    $content_type = 'application/json';
+  }
   $cmd = $IPAM_BIN.'/'.'ipam-'.$q->param('cmd');
   -x $cmd or error_400("Command $cmd does not exist or is not executable");
 }

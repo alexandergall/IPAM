@@ -13,31 +13,40 @@ use lib "$base_dir/lib/perl5";
 use IPAM 0.01;
 use NetAddr::IP;
 use Getopt::Long;
+use JSON;
 use open qw/:std :utf8/;
 
 my %opt = ( 'default-domain' => 'switch.ch.' , recurse => 0);
-my $indent_unit = 2;
 my %af_to_name = ( 4 => 'IPv4', 6 => 'IPv6' );
 my (%visited_fqdns, %visited_prefixes, %visited_hosts);
+my $indent_unit = 2;
+my $recurse;
 
 sub usage() {
   print <<"EOF";
-usage: $0 [--default-domain=<domain>] [--detail] [--no-stub-recurse] [--recurse=<level>] <fqdn> | <address> | <prefix> ...
+usage: $0 [--default-domain=<domain>] [--detail] [--recurse=<level] [--show-recursion-level] [--json=pretty|compact] <fqdn> | <address> | <prefix> ...
 EOF
 exit(1);
 }
 
+sub error($) {
+  my ($msg) = @_;
+  print($msg."\n");
+  exit(1);
+}
 sub name_info($$);
 sub prefix_info($$);
-sub indent($$);
-sub detail($$);
-sub print_pf_registry($$$);
 
+my @result;
 GetOptions(\%opt, "default-domain=s", "detail", "recurse=i",
-	   'no-stub-recurse') or usage();
+           "show-recursion-level", "json=s") or usage();
+if (defined $opt{json}) {
+  grep /^$opt{json}$/, ('compact', 'pretty') or usage();
+}
 @ARGV >= 1 or usage();
 $opt{recurse}++;
 $opt{recurse} < 0 and $opt{recurse} = 0;
+$recurse = $opt{recurse};
 $opt{'default-domain'} =~ /\.$/ or 
   die "The default domain must end with a dot.\n";
 system("cd $base_dir && make --silent cache-maybe-rebuild") == 0 or die;
@@ -45,245 +54,250 @@ my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 
 foreach my $item (@ARGV) {
   if ($item =~ /(\d+\.\d+\.\d+\.\d+|:|\/)/) {
-    my $ip = NetAddr::IP->new($item) or die "Malformed address $item";
+    my $ip = NetAddr::IP->new($item) or error("Malformed address $item");
     prefix_info($ip, 0);
   } else {
     name_info($item, 0);
   }
 }
+if ($opt{json}) {
+  print(to_json(\@result, { pretty => $opt{json} eq 'pretty' ? 1 : 0}));
+}
+
+sub indent($$) {
+  my ($level, $msg) = @_;
+  $msg and print ' 'x($level*$indent_unit).$msg;
+}
+
+sub detail($$) {
+  my ($indent, $ref) = @_;
+  $opt{detail} or return;
+  if ($ref->{'defined-at'}) {
+    my ($file, $line) = @{$ref->{'defined-at'}}{qw/file line/};
+    indent($indent, "It is defined at $file, line $line\n");
+  }
+  $ref->{description} and indent($indent, "It has the description "
+                                 .$ref->{description}."\n");
+  foreach my $tag (@{$ref->{tags}}) {
+    my $inherited_from = '';
+    if ($tag->{'inherited-from'}) {
+      $inherited_from = ' (inherited from '.
+        join(', ', @{$tag->{'inherited-from'}}).')';
+    }
+    indent($indent, "It has the tag: ".$tag->{name}
+           ."$inherited_from\n");
+  }
+}
+
+sub alternative($) {
+  my ($ref) = @_;
+  my $alt = $ref->{alternative} or return '';
+  return ' ['.(($alt->{active} == JSON::true) ? 'Active' : 'Inactive')
+    . " alternative $alt->{name}]";
+}
+
+sub recursion_level($) {
+  my ($enter) = @_;
+  $opt{'show-recursion-level'} or return;
+  my $level = $recurse-$opt{recurse};
+  $level > 0 or return;
+  my $mode = $enter ? 'Entering' : 'Exiting';
+  print("=========== $mode recursion level $level\n");
+}
 
 sub name_info($$) {
   my ($fqdn, $indent) = @_;
-  my $recurse_save = $opt{recurse};
-  $opt{recurse} > 0 and $opt{recurse}--;
   unless ($fqdn =~ /\.$/) {
     $fqdn .= '.';
     unless ($fqdn =~ /\.$opt{'default-domain'}$/) {
       $fqdn .= $opt{'default-domain'};
     }
   }
-  unless (exists $visited_fqdns{$fqdn}) {
-    $visited_fqdns{$fqdn} = 1;
-    indent($indent++, "The domain name $fqdn\n");
-    my $info = $ipam->nameinfo($fqdn);
-    if ($info->{network}) {
-      my $network = $info->{network};
+  exists $visited_fqdns{$fqdn} and return;
+  $visited_fqdns{$fqdn} = 1;
+  recursion_level(1);
+  my $recurse_save = $opt{recurse};
+  $opt{recurse} > 0 and $opt{recurse}--;
+  my ($info, $raw) = $ipam->nameinfo($fqdn);
+  if ($opt{json}) {
+    defined ($raw) and push (@result, $raw);
+  } else {
+    defined $info or
+      error("The IPAM contains no information about the domain name $fqdn");
+    indent($indent++, "The domain name ".$raw->{name}."\n");
+
+    if (my $subnet = $raw->{'is-a'}{subnet}) {
       indent($indent, "Is a subnet.\n");
       if ($opt{detail}) {
-	detail($network, $indent+1);
-	if (my @hosts = $network->hosts(sub {
-					  $_[0]->name() cmp $_[1]->name() })) {
-	  indent($indent+1, "It contains the hosts\n");
-	  foreach my $host (@hosts) {
-	    indent($indent+2, $host->name()."\n");
-	    $opt{recurse} and name_info($host->name(), $indent+3);
-	  }
-	}
+        detail($indent+1, $subnet);
+        if (my @hosts = @{$subnet->{hosts}}) {
+          indent($indent+1, "It contains the hosts\n");
+          foreach my $host (@hosts) {
+            indent($indent+2, "$host\n");
+            $opt{recurse} and name_info($host, $indent+3);
+          }
+        }
       }
     }
-    if ($info->{block}) {
-      foreach my $prefix (@{$info->{block}}) {
-	indent($indent, "Is a"
-	       .($prefix->is_stub() ? ' stub network' : 'n address block')
-	       ." that defines the prefix ".$prefix->name()."\n");
-	detail($prefix, $indent+1);
-	$opt{recurse} and prefix_info($prefix->ip(), $indent+1);
-      }
+
+    foreach my $stubnet (@{$raw->{'is-a'}{stubnet}}) {
+      indent($indent, "It is a stub network that defines the prefix ".
+             "$stubnet->{prefix}\n");
+      detail($indent+1, $stubnet);
+      $opt{recurse} and
+        prefix_info(NetAddr::IP->new($stubnet->{prefix}), $indent+2);
     }
-    if ($info->{iid}) {
-      my $iid = $info->{iid};
-      indent($indent, "Is the IPv6 interface-identifier "
-	     .$iid->ip()->addr()."\n");
+
+    foreach my $block (@{$raw->{'is-a'}{'address-block'}}) {
+      indent($indent, "Is an address block that defines the prefix ".
+             "$block->{prefix}\n");
+      detail($indent+1, $block);
+      $opt{recurse} and
+        prefix_info(NetAddr::IP->new($block->{prefix}), $indent+2);
+    }
+
+    if (my $iid = $raw->{'is-a'}{iid}) {
+      indent($indent, "Is the IPv6 interface-identifier $iid->{id}\n");
       if ($opt{detail}) {
-	detail($iid, $indent+1);
-	$iid->use() or indent($indent+1, "It is configured to be ignored "
-			      ."for address assignment.\n");
+        detail($indent+1, $iid);
+        $iid->{use} == JSON::false and
+          indent($indent+1, "It is configured to be ignored "
+                 ."for address assignment\n");
       }
     }
-    if ($info->{zone}) {
-      my $zone = $info->{zone};
-      indent($indent, "Is a DNS zone\n");
-      detail($zone, $indent+1);
-      $opt{recurse} and map { $_->print(\*STDOUT, ($indent+1)*$indent_unit,
-					$opt{detail}) }
-	(sort { $a->name() cmp $b->name() } $zone->domains());
+
+    if (my $zone = $raw->{'is-a'}{zone}) {
+      indent($indent, "Is a dns zone\n");
+      detail($indent+1, $zone);
+      $opt{recurse} and map { $_->print(\*STDOUT, ($indent+2)*$indent_unit,
+                                        $opt{detail}) }
+        (sort { $a->name() cmp $b->name() } $info->{zone}->domains());
     }
-    if ($info->{host}) {
-      foreach my $host (@{$info->{host}}) {
-	indent($indent, "Is a host that belongs to the network "
-	       .$host->network()->name()."\n");
-	if ($opt{detail}) {
-	  detail($host, $indent+1);
-	  foreach my $address ($host->addresses()) {
-	    my $canonical_host = $address->canonical_host();
-	    indent($indent+1,
-		   "It is ".((defined $canonical_host and
-			      $canonical_host == $host)
-			     ? 'the canonical' : 'a')
-		   ." name for the address ".$address->name()
-		   .alternatives(IPAM::Alternative::MAP_ADDRESS,
-				 $host, $address));
-	    $opt{recurse} and prefix_info($address->ip(), $indent+2);
-	  }
-	  map { indent($indent+1,
-		       $_->name()." is an alias for the host"
-		       .alternatives(IPAM::Alternative::MAP_ALIAS,
-				    $host, $_));
-		$opt{recurse} and name_info($_->name(), $indent+2); }
-	    $host->aliases(sub { $_[0]->name() cmp $_[1]->name() });
-	  map { indent($indent+1, "It is hosted on ".$_->name()."\n");
-		$opt{recurse} and name_info($_->name(), $indent+2); }
-	    $host->hosted_on();
-	  map { indent($indent+1, "It is hosting ".$_->name()."\n");
-		$opt{recurse} and name_info($_->name(), $indent+2); }
-	    $host->hosting();
-	}
+
+    foreach my $alias (@{$raw->{'is-a'}{alias}}) {
+      my $cname = $alias->{'canonical-name'};
+      indent($indent, "Is an alias for the host ".
+             $cname->{name}.
+             alternative($cname)."\n");
+      detail($indent+1, $alias);
+      $opt{recurse} and name_info($cname->{name}, $indent+2);
+    }
+
+    foreach my $host (@{$raw->{'is-a'}{host}}) {
+      indent($indent, "Is a host that belongs to the network ".
+             $host->{network}."\n");
+      $opt{recurse} and name_info($host->{network}, $indent+1);
+      if ($opt{detail}) {
+        detail($indent+1, $host);
+        map {
+          indent($indent+1, 'It is '.
+                 (($_->{'canonical-name'} == JSON::true) ?
+                  'the canonical' : 'a').
+                 ' name for the address '.$_->{address}.
+                 alternative($_)."\n");
+          $opt{recurse} and prefix_info(NetAddr::IP->new($_->{address}), $indent+2);
+        } @{$host->{addresses}};
+        map {
+          indent($indent+1, $_->{name}.' is an alias for the host'.
+                 alternative($_)."\n");
+          $opt{recurse} and name_info($_->{name}, $indent+2);
+        } @{$host->{aliases}};
+        map {
+          indent($indent+1, "It is hosted on $_\n");
+          $opt{recurse} and name_info($_, $indent+2);
+        } @{$host->{'hosted-on'}};
+        map {
+          indent($indent+1, "It is hosting $_\n");
+          $opt{recurse} and name_info($_, $indent+2);
+        } @{$host->{hosting}};
       }
     }
-    if ($info->{alias}) {
-      foreach my $host (@{$info->{alias}}) {
-	indent($indent,
-	       "Is an alias for the host ".$host->name()
-	       .alternatives(IPAM::Alternative::MAP_ALIAS,
-			    $host, $host->alias_registry()->lookup($fqdn)));
-	detail($host->alias_registry()->lookup($fqdn), $indent+1);
-	$opt{recurse} and name_info($host->name(), $indent+1);
-      }
-    }
-    my ($zone, $rel_name) = $ipam->registry(IPAM::REG_ZONE)->lookup_fqdn($fqdn);
-    if ($zone) {
-      if (my $domain = $zone->lookup_domain($rel_name)) {
+
+    if (my $dns = $raw->{dns}) {
+      if (@{$dns->{records}}) {
 	indent($indent, "Owns the following DNS records in the zone "
-	       .$zone->name()."\n");
-	$domain->print(\*STDOUT, ($indent+1)*$indent_unit, $opt{detail});
+	       ."$dns->{zone}\n");
+        map { indent($indent+1, $_."\n") } @{$dns->{records}};
       } else {
-	indent($indent, "Belongs to the zone ".$zone->name()
-	       .", but there are no DNS records associated with it.\n");
+	indent($indent, "Belongs to the zone $dns->{zone}, ".
+	       "but there are no DNS records associated with it.\n");
       }
     } else {
       indent($indent, "Does not belong to any of the configured zones.\n")
     }
   }
   $opt{recurse} = $recurse_save;
+  recursion_level(0);
 }
 
 sub prefix_info($$) {
   my ($ip, $indent) = @_;
+  exists $visited_prefixes{$ip->cidr()} and return;
+  $visited_prefixes{$ip->addr()} = 1;
+  recursion_level(1);
   my $recurse_save = $opt{recurse};
   $opt{recurse}--;
   $opt{recurse} < 0 and $opt{recurse} = 0;
-  unless (exists $visited_prefixes{$ip->addr()}) {
-    $visited_prefixes{$ip->addr()} = 1;
-    my $type = $ip->bits() == $ip->masklen() ? 'address' : 'prefix';
-    if (my $iid = $ipam->registry(IPAM::REG_IID)->lookup_by_ip($ip)) {
-      indent($indent, $ip->addr()." is an IPv6 interface identifier.\n");
-      detail($iid, $indent+1);
-      indent($indent+1, "It is assigned to host ".$iid->name()."\n");
-      $opt{recurse} and name_info($iid->name(), $indent+1);
-      $opt{recurse} = $recurse_save;
-      return;
-    }
-    my ($prefix, @path) =
-      $ipam->address_map()->lookup_by_ip($ip);
-    unless ($prefix or @path) {
-      print "The database contains no information about the $type $ip\n";
-      $opt{recurse} = $recurse_save;
-      return;
-    }
-    if ($prefix) {
-      if ($prefix->isa('IPAM::Address')) {
-	indent($indent, $prefix->name()." is an address.\n");
-	detail($prefix, $indent+1);
-	if (my $canonical_host = $prefix->canonical_host()) {
-	  indent($indent+1, "It has the canonical name ".
-		 $canonical_host->name()."\n");
-	} else {
-	  indent($indent+1, "It has no canonical name.\n");
-	}
-	map { indent($indent+1,
-		     "It is assigned to the host ".$_->name()
-		     .alternatives(IPAM::Alternative::MAP_ADDRESS,
-				   $_, $prefix));
-	      $opt{recurse} and name_info($_->name(), $indent+2) }
-	  $prefix->hosts();
+  my $raw = $ipam->prefixinfo($ip);
+  if ($opt{json}) {
+    defined $raw and push (@result, $raw);
+  } elsif ($raw) {
+    if ($raw->{type} eq 'iid') {
+      indent($indent, "$raw->{name} is an IPv6 interface identifier.\n");
+      detail($indent+1, $raw);
+      indent($indent+1, "It is assigned to host ".$raw->{'assigned-to'}."\n");
+      $opt{recurse} and name_info($raw->{'assigned-to'}, $indent+2);
+    } elsif ($raw->{'exact-match'} == JSON::false) {
+      print("There is no exact match for the $raw->{type} $raw->{name}\n");
+    } elsif ($raw->{type} eq 'prefix') {
+      indent($indent, "$raw->{name} is a prefix.\n");
+      detail($indent+1, $raw);
+      if ($raw->{subtype} eq 'block'){
+        ## Don't recurse on the assigned name, because the mapping is
+        ## 1:1 and recursion will not provide any additional information.
+        indent($indent+1, "It has the name ".$raw->{'assigned-to'}."\n");
+        indent($indent+1, "It is an address block.\n");
       } else {
-	if (my $network = $prefix->network()) {
-	  indent($indent, $prefix->name()." is assigned to the subnet "
-		 .$network->name()."\n");
-	} else {
-	  indent($indent, $prefix->name()." is assigned to the "
-		 .($prefix->is_stub() ? 'stub network ' : 'address block ')
-		 .$prefix->id()."\n");
-	}
-	detail($prefix, $indent+1);
-	$opt{recurse} and
-	  print_pf_registry($prefix->registry(), $indent+1, $prefix->af());
+        indent($indent+1, "It is a stub network.\n");
+        if ($raw->{subnet}) {
+          indent($indent+1, "It is assigned to the subnet $raw->{subnet}\n");
+          $opt{recurse} and name_info($raw->{'subnet'}, $indent+2);
+        } else {
+          indent($indent+1, "It is not assigned to any subnet\n");
+        }
+      }
+      indent($indent+1, "Registered prefixes or addresses within this block:\n");
+      foreach my $lower (@{$raw->{'next-level-prefixes'}}) {
+        indent($indent+2, sprintf("%-35s  %-30s %-30s\n",
+                                  $lower->{prefix}, $lower->{name},
+                                  $lower->{description}));
+        $opt{recurse} and prefix_info(NetAddr::IP->new($lower->{prefix}), $indent+3);
       }
     } else {
-      indent($indent, "There is no exact match for the $type $ip\n");
-    }
-    if (@path) {
-      $indent += 1;
-      indent($indent++, "It is covered by a branch of the address map\n");
-      foreach my $element (@path) {
-	indent($indent++, sprintf "%-20s  %s\n", $element->name(),
-	       $element->id());
+      indent($indent, "$raw->{name} is an address.\n");
+      detail($indent+1, $raw);
+      if (my $cname = $raw->{'canonical-name'}) {
+        indent($indent+1, "It has the canonical name $cname\n");
+        $opt{recurse} and name_info($cname, $indent+2);
+      } else {
+        indent($indent+1, "It has no canonical name\n");
       }
+      map {
+        indent($indent+1, "It is assigned to the host $_->{name}".
+               alternative($_)."\n");
+        $opt{recurse} and name_info($_->{name}, $indent+2);
+      } @{$raw->{'assigned-to'}};
     }
+    if (@{$raw->{path}}) {
+      indent($indent+1, "It is covered by a branch of the address map\n");
+      map { indent(2+$indent++, sprintf "%-20s  %s\n", $_->{prefix},
+                   $_->{name}) } @{$raw->{path}};
+    }
+  } else {
+    error("The IPAM contains no information about the prefix ".$ip->cidr());
   }
   $opt{recurse} = $recurse_save;
-}
-
-sub indent($$) {
-  my ($level, $msg) = @_;
-  print ' 'x($level*$indent_unit).$msg;
-}
-
-sub detail($$) {
-  my ($node, $indent) = @_;
-  return unless $opt{detail};
-  my ($file, $line) = $node->nodeinfo();
-  ($file and $line) and indent($indent, "It is defined at $file, line $line\n");
-  my $desc = $node->description();
-  $desc and indent($indent, "It has the description: $desc\n");
-  my $next = $node->tags_iterator();
-  while (my ($tag, $things_ref) = $next->()) {
-    indent($indent, "It has the tag: $tag"
-	   .(@$things_ref ? " (inherited from "
-	     .join(', ', map { $_->name() } @$things_ref).")" : '')."\n");
-  }
-}
-
-sub print_pf_registry($$$) {
-  my ($reg, $indent, $af) = @_;
-  my $recurse_save = $opt{recurse};
-  $opt{recurse}--;
-  $opt{recurse} < 0 and $opt{recurse} = 0;
-  my $next = $reg->iterator(sub { my ($a, $b) = @_; $a->ip() <=> $b->ip(); },
-			    $af);
-  while (my $prefix = $next->()) {
-    indent($indent, sprintf("%-35s  %-30s %-30s\n", $prefix->name(),
-			    $prefix->id(), $prefix->description()));
-    next if ($prefix->is_stub() and $opt{'no-stub-recurse'});
-    if ($prefix->isa('IPAM::Address')) {
-      if ($opt{recurse} and $prefix->canonical_host()) {
-	name_info($prefix->id(), $indent+1);
-      }
-    } elsif($opt{recurse}) {
-      print_pf_registry($prefix->registry(), $indent+1, $prefix->af());
-    }
-  }
-  $opt{recurse} = $recurse_save;
-}
-
-sub alternatives($$$) {
-  my ($type, $host, $thing) = @_;
-  if (my ($alt, $state) = $ipam->registry(IPAM::REG_ALTERNATIVE)
-      ->find_mapping($type, $host, $thing)) {
-    return(" [".($alt->check_state($state) ? 'Active' : 'Inactive')
-	   ." alternative ".$alt->name().":$state]\n");
-  }
-  return("\n");
+  recursion_level(0);
 }
 
 ## Local Variables:

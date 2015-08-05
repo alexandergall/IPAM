@@ -22,26 +22,57 @@ use warnings;
 use lib "$base_dir/lib/perl5";
 use IPAM 0.01;
 use Getopt::Long;
+use JSON;
 
 my @types = qw/block net subnet host/;
 my %opt = ( type => 'subnet', );
+## Collect data for JSON mode (--json)
+my ($ipam, @json);
 
-sub walk_registry($);
 my $sort_by_ip = sub { my ($a, $b) = @_; $a->ip() <=> $b->ip(); };
 my $sort_by_name = sub { my ($a, $b) = @_; $a->name() cmp $b->name(); };
 
 sub usage() {
   print <<"EOF";
-usage: $0 [--tag=<tag> ...] [--type=block|net|subnet|host] [--detail]
+usage: $0 [--tag=<tag> ...] [--type=block|net|subnet|host] [--detail] [--json=pretty|compact]
 EOF
 exit(1);
 }
 
-GetOptions(\%opt, 'tag=s@', 'type=s', 'detail') or usage();
+sub walk_registry($);
+
+sub walk_registry($) {
+  my ($reg) = @_;
+  my $next = $reg->iterator($sort_by_ip);
+  while (my $prefix = $next->()) {
+    if ($prefix->has_tags(@{$opt{tag}})) {
+      if (($opt{type} eq 'net' and $prefix->is_stub()) or
+          ($opt{type} eq 'block' and not $prefix->is_stub())) {
+        if ($opt{json}) {
+          push(@json, $ipam->prefixinfo($prefix->ip()));
+        } else {
+          print $prefix->name()."\n";
+          if ($opt{detail}) {
+            my $desc = $prefix->description();
+            $desc and print "  Description: $desc\n";
+            map { print "  Tag: ".$_."\n"} keys(%{$prefix->tags()});
+            print "  Name: ".$prefix->id()."\n";
+          }
+        }
+      }
+    }
+    walk_registry($prefix->registry()) unless $prefix->is_stub();
+  }
+}
+
+GetOptions(\%opt, 'tag=s@', 'type=s', 'detail', 'json=s') or usage();
 grep /^$opt{type}$/, @types or usage();
+if (defined $opt{json}) {
+  grep /^$opt{json}$/, ('compact', 'pretty') or usage();
+}
 
 system("cd $base_dir && make --silent cache-maybe-rebuild") == 0 or die;
-my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
+$ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 
 if (grep /^$opt{type}$/, qw/block net/) {
   walk_registry($ipam->address_map()->registry());
@@ -51,14 +82,19 @@ if ($opt{type} eq 'subnet') {
   my $next = $ipam->registry(IPAM::REG_NETWORK)->iterator($sort_by_name);
   while (my $network = $next->()) {
     next unless $network->has_tags(@{$opt{tag}});
-    print $network->name()."\n";
-    if ($opt{detail}) {
-      my $desc = $network->description();
-      $desc and print "  Description: $desc\n";
-      map { print "  Tag: ".$_."\n"} keys(%{$network->tags()});
-      map { print "  Prefix: ".$_->name()."\n" } $network->prefixes($sort_by_ip);
+    if ($opt{json}) {
+      push(@json, ($ipam->nameinfo($network->name()))[1])
+    } else {
+      print $network->name()."\n";
+      if ($opt{detail}) {
+        my $desc = $network->description();
+        $desc and print "  Description: $desc\n";
+        map { print "  Tag: ".$_."\n"} keys(%{$network->tags()});
+        map { print "  Prefix: ".$_->name()."\n" } $network->prefixes($sort_by_ip);
+      }
     }
   }
+
 }
 
 if ($opt{type} eq 'host') {
@@ -70,25 +106,14 @@ if ($opt{type} eq 'host') {
       push(@hosts, $host);
     }
   }
-  map { print $_->name()."\n" } sort { $a->name() cmp $b->name() } @hosts;
-}
-
-sub walk_registry($) {
-  my ($reg) = @_;
-  my $next = $reg->iterator($sort_by_ip);
-  while (my $prefix = $next->()) {
-    if ($prefix->has_tags(@{$opt{tag}})) {
-      if (($opt{type} eq 'net' and $prefix->is_stub()) or
-	  ($opt{type} eq 'block' and not $prefix->is_stub())) {
-	print $prefix->name()."\n";
-	if ($opt{detail}) {
-	  my $desc = $prefix->description();
-	  $desc and print "  Description: $desc\n";
-	  map { print "  Tag: ".$_."\n"} keys(%{$prefix->tags()});
-	  print "  Name: ".$prefix->id()."\n";
-	}
-      }
-    }
-    walk_registry($prefix->registry()) unless $prefix->is_stub();
+  my @hosts_sorted = sort { $a->name() cmp $b->name() } @hosts;
+  if ($opt{json}) {
+    map { push(@json, ($ipam->nameinfo($_->name()))[1]) } @hosts_sorted;
+  } else {
+    map { print $_->name()."\n" } @hosts_sorted;
   }
 }
+
+$opt{json} and print(to_json(\@json,
+                             { pretty => $opt{json} eq 'pretty' ? 1 : 0 }));
+

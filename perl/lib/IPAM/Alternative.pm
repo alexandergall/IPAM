@@ -52,7 +52,7 @@ Maps a host to a L<IPAM::Address> object.
 
 =item IPAM::Alternative::MAP_ALIAS
 
-Maps a host to a L<IPAM::Thing>, which holds the name of a DNS alias
+Maps a host to a L<IPAM::Alias>, which holds the name of a DNS alias
 (CNAME) assigned to the host.
 
 =item IPAM::Alternative::MAP_RR
@@ -286,7 +286,7 @@ match the FQDN $fqdn and returns a reference to a hash keyed by the
 name of the states for which such mappings exist.  Each value is a
 list that contains both elements of the mapping, i.e. a L<IPAM::Host>
 objects that defines the canonical name of the alias and a
-L<IPAM::Thing> object that describes the alias itself.  While multiple
+L<IPAM::Alias> object that describes the alias itself.  While multiple
 such mappings can exist, at most one of them can be active at any time
 due to the singleton nature of DNS CNAME records.
 
