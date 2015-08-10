@@ -20,11 +20,11 @@ my %opt = ( 'default-domain' => 'switch.ch.' , recurse => 0);
 my %af_to_name = ( 4 => 'IPv4', 6 => 'IPv6' );
 my (%visited_fqdns, %visited_prefixes, %visited_hosts);
 my $indent_unit = 2;
-my $recurse;
+my ($recurse, %exclude);
 
 sub usage() {
   print <<"EOF";
-usage: $0 [--default-domain=<domain>] [--detail] [--recurse=<level] [--show-recursion-level] [--json=pretty|compact] <fqdn> | <address> | <prefix> ...
+usage: $0 [--default-domain=<domain>] [--detail] [--recurse=<level] [--show-recursion-level] [--json=pretty|compact] [--json-exclude=<spec> ...] <fqdn> | <address> | <prefix> ...
 EOF
 exit(1);
 }
@@ -39,9 +39,16 @@ sub prefix_info($$);
 
 my @result;
 GetOptions(\%opt, "default-domain=s", "detail", "recurse=i",
-           "show-recursion-level", "json=s") or usage();
+           "show-recursion-level", "json=s", "json-exclude=s@") or usage();
 if (defined $opt{json}) {
   grep /^$opt{json}$/, ('compact', 'pretty') or usage();
+}
+foreach my $exclude (@{$opt{'json-exclude'}}) {
+  my ($type, $rest) = split('@', $exclude);
+  grep /$type/, qw/fqdn prefix address/ or die "invalid exclude type: $type";
+  foreach my $spec (split('/', $rest)) {
+    push(@{$exclude{$type}}, [ split(':', $spec) ]);
+  }
 }
 @ARGV >= 1 or usage();
 $opt{recurse}++;
@@ -105,6 +112,27 @@ sub recursion_level($) {
   print("=========== $mode recursion level $level\n");
 }
 
+sub delete_element($@);
+sub delete_element($@) {
+  my ($href, @elts) = @_;
+  if (@elts > 1) {
+    my @next;
+    push(@next, shift @elts);
+    if ($next[0] eq '*') {
+      @next = keys(%{$href});
+    }
+    foreach my $next (@next) {
+      if (ref $href->{$next} eq 'ARRAY') {
+        map { delete_element(\%{$_}, @elts) } @{$href->{$next}};
+      } else {
+        delete_element(\%{$href->{$next}}, @elts);
+      }
+    }
+  } else {
+    delete $href->{shift @elts};
+  }
+}
+
 sub name_info($$) {
   my ($fqdn, $indent) = @_;
   unless ($fqdn =~ /\.$/) {
@@ -120,7 +148,10 @@ sub name_info($$) {
   $opt{recurse} > 0 and $opt{recurse}--;
   my ($info, $raw) = $ipam->nameinfo($fqdn);
   if ($opt{json}) {
-    defined ($raw) and push (@result, $raw);
+    if (defined $raw) {
+      map { delete_element($raw, @{$_}) } @{$exclude{fqdn}};
+      push (@result, $raw);
+    }
   } else {
     defined $info or
       error("The IPAM contains no information about the domain name $fqdn");
@@ -240,7 +271,10 @@ sub prefix_info($$) {
   $opt{recurse} < 0 and $opt{recurse} = 0;
   my $raw = $ipam->prefixinfo($ip);
   if ($opt{json}) {
-    defined $raw and push (@result, $raw);
+    if (defined $raw) {
+      map { delete_element($raw, @{$_}) } @{$exclude{prefix}};
+      push (@result, $raw);
+    }
   } elsif ($raw) {
     if ($raw->{type} eq 'iid') {
       indent($indent, "$raw->{name} is an IPv6 interface identifier.\n");

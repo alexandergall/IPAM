@@ -27,20 +27,19 @@ use JSON;
 my @types = qw/block net subnet host/;
 my %opt = ( type => 'subnet', );
 ## Collect data for JSON mode (--json)
-my ($ipam, @json);
+my ($ipam, @json, %exclude);
 
 my $sort_by_ip = sub { my ($a, $b) = @_; $a->ip() <=> $b->ip(); };
 my $sort_by_name = sub { my ($a, $b) = @_; $a->name() cmp $b->name(); };
 
 sub usage() {
   print <<"EOF";
-usage: $0 [--tag=<tag> ...] [--type=block|net|subnet|host] [--detail] [--json=pretty|compact]
+usage: $0 [--tag=<tag> ...] [--type=block|net|subnet|host] [--detail] [--json=pretty|compact] [--json-exclude=<spec> ...]
 EOF
 exit(1);
 }
 
 sub walk_registry($);
-
 sub walk_registry($) {
   my ($reg) = @_;
   my $next = $reg->iterator($sort_by_ip);
@@ -49,7 +48,9 @@ sub walk_registry($) {
       if (($opt{type} eq 'net' and $prefix->is_stub()) or
           ($opt{type} eq 'block' and not $prefix->is_stub())) {
         if ($opt{json}) {
-          push(@json, $ipam->prefixinfo($prefix->ip()));
+          my $raw = $ipam->prefixinfo($prefix->ip());
+          map { delete_element($raw, @{$_}) } @{$exclude{prefix}};
+          push(@json, $raw);
         } else {
           print $prefix->name()."\n";
           if ($opt{detail}) {
@@ -65,12 +66,40 @@ sub walk_registry($) {
   }
 }
 
-GetOptions(\%opt, 'tag=s@', 'type=s', 'detail', 'json=s') or usage();
+sub delete_element($@);
+sub delete_element($@) {
+  my ($href, @elts) = @_;
+  if (@elts > 1) {
+    my @next;
+    push(@next, shift @elts);
+    if ($next[0] eq '*') {
+      @next = keys(%{$href});
+    }
+    foreach my $next (@next) {
+      if (ref $href->{$next} eq 'ARRAY') {
+        map { delete_element(\%{$_}, @elts) } @{$href->{$next}};
+      } else {
+        delete_element(\%{$href->{$next}}, @elts);
+      }
+    }
+  } else {
+    delete $href->{shift @elts};
+  }
+}
+
+GetOptions(\%opt, 'tag=s@', 'type=s', 'detail', 'json=s', 'json-exclude=s@')
+  or usage();
 grep /^$opt{type}$/, @types or usage();
 if (defined $opt{json}) {
   grep /^$opt{json}$/, ('compact', 'pretty') or usage();
 }
-
+foreach my $exclude (@{$opt{'json-exclude'}}) {
+  my ($type, $rest) = split('@', $exclude);
+  grep /$type/, qw/fqdn prefix address/ or die "invalid exclude type: $type";
+  foreach my $spec (split('/', $rest)) {
+    push(@{$exclude{$type}}, [ split(':', $spec) ]);
+  }
+}
 system("cd $base_dir && make --silent cache-maybe-rebuild") == 0 or die;
 $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 
@@ -83,7 +112,9 @@ if ($opt{type} eq 'subnet') {
   while (my $network = $next->()) {
     next unless $network->has_tags(@{$opt{tag}});
     if ($opt{json}) {
-      push(@json, ($ipam->nameinfo($network->name()))[1])
+      my $raw = ($ipam->nameinfo($network->name()))[1];
+      map { delete_element($raw, @{$_}) } @{$exclude{fqdn}};
+      push(@json, $raw);
     } else {
       print $network->name()."\n";
       if ($opt{detail}) {
@@ -108,7 +139,11 @@ if ($opt{type} eq 'host') {
   }
   my @hosts_sorted = sort { $a->name() cmp $b->name() } @hosts;
   if ($opt{json}) {
-    map { push(@json, ($ipam->nameinfo($_->name()))[1]) } @hosts_sorted;
+    foreach my $host (@hosts_sorted) {
+      my $raw = ($ipam->nameinfo($host->name()))[1];
+      map { delete_element($raw, @{$_}) } @{$exclude{fqdn}};
+      push(@json, $raw);
+    }
   } else {
     map { print $_->name()."\n" } @hosts_sorted;
   }
