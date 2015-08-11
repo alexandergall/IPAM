@@ -997,16 +997,20 @@ sub registry($$) {
   return($self->{$registries{$registry}{key}});
 }
 
-=item C<nameinfo($fqdn)>
+=item C<nameinfo($fqdn, $exclude)>
 
-  my ($info, $json_raw) = $ipam->nameinfo($fqdn);
+  my %exclude = ( fqdn => ( [ "dns" ],
+                            [ "is-a", "host", "tags" ],
+                            [ "is-a", "*", "defined-at" ] ) );
+  my ($info, $json_raw) = $ipam->nameinfo($fqdn, \%exclude);
 
 If the FQDN C<$fqdn> is known to the IPAM, two objects are returned
 that contain information about the name in different formats.  If the
 name does not exist, C<(undef, undef)> is returned.
 
-C<$info> is a reference to a hash with the following keys, which
-provides access to the IPAM objects that refer to C<$fqdn>.
+If C<$exclude> is C<undef>, C<$info> is a reference to a hash with the
+following keys, which provides access to the IPAM objects that refer
+to C<$fqdn>.
 
 =over 4
 
@@ -1120,6 +1124,28 @@ with C<$fqdn>.
 
 =back
 
+A reference to a hash can be supplied as C<$exclude> to remove chosen
+hash elements from the C<$info> hash and the raw JSON data structure.
+The hash should contain the key C<fqdn> if filtering is desired.  All
+other keys are ignored.  The value of the C<fqdn> key is an array of
+arrays, each of which is a sequence of strings that identifies a path
+to a hash key in the JSON representation that should be deleted.
+
+If an intermediate element in a path is an array of hashes, the
+operation is applied to all hashes in the array.  The wildcard
+character C<*> can be applied to an element in the path that
+represents a hash key, in which case the operation is applied to all
+keys in the hash.  Consider the following construct
+
+  my %exclude = ( fqdn => ( [ "dns" ],
+                            [ "is-a", "host", "tags" ],
+                            [ "is-a", "*", "defined-at" ] ) );
+
+The first entry deletes the hash C<dns>.  The second entry deletes the
+tags of all hashes in the C<hosts> array of the C<is-a> hash, while
+the last entry deletes the C<defined-at> hashes for all keys in the
+C<is-a> hash.
+
 =cut
 
 ### Helper function for nameinfo() that adds "defined-at",
@@ -1155,8 +1181,29 @@ sub _alternatives($$$$$) {
   return($ref);
 }
 
-sub nameinfo($$) {
-  my ($self, $fqdn) = @_;
+sub _exclude_json_element($@);
+sub _exclude_json_element($@) {
+  my ($href, @elts) = @_;
+  if (@elts > 1) {
+    my @next;
+    push(@next, shift @elts);
+    if ($next[0] eq '*') {
+      @next = keys(%{$href});
+    }
+    foreach my $next (@next) {
+      if (ref $href->{$next} eq 'ARRAY') {
+        map { _exclude_json_element(\%{$_}, @elts) } @{$href->{$next}};
+      } else {
+        _exclude_json_element(\%{$href->{$next}}, @elts);
+      }
+    }
+  } else {
+    delete $href->{shift @elts};
+  }
+}
+
+sub nameinfo($$$) {
+  my ($self, $fqdn, $exclude) = @_;
   my (%info, $json);
   foreach my $reg (keys(%registries)) {
     $info{$reg} = $self->{$registries{$reg}{key}}->lookup($fqdn);
@@ -1252,15 +1299,19 @@ sub nameinfo($$) {
   }
 
   if (keys(%{$fqdn{'is-a'}})) {
+    $exclude and
+      map { _exclude_json_element(\%fqdn, @{$_}) } @{$exclude->{fqdn}};
     return(\%info, \%fqdn);
   } else {
     return(undef, undef);
   }
 }
 
-=item C<prefixinfo($ip)>
+=item C<prefixinfo($ip, $exclude)>
 
-  my $json_raw = $ipam->prefixinfo($ip);
+  my %exclude = ( prefix => ( [ "tags" ],
+                            [ "next-level-prefixes" ] ) );
+  my $json_raw = $ipam->prefixinfo($ip, \%exclude);
 
 Information about the prefix or address represented by the
 L<NetAddr::IP> object C<$ip> is collected from the IPAM's address map
@@ -1271,7 +1322,7 @@ part of the address map.
 The hash referred to by C<$json_raw> can be passed directly to
 C<JSON::to_json()> to obtain a representation in JSON.
 
-The hash contains the keys
+If C<$exclude> is C<undef>, the hash contains the keys
 
 =over 4
 
@@ -1308,10 +1359,16 @@ of maximum length (32 for IPv4 and 128 for IPv6).
 
 =back
 
+A reference to a hash can be supplied as C<$exclude> to remove chosen
+hash elements from the raw JSON data structure, refer to the
+documentation of the C<nameinfo()> method for details.  For the
+C<prefixinfo()> method, the only relevant key of the C<%exclude> hash
+is called C<prefix>.
+
 =cut
 
-sub prefixinfo($$) {
-  my ($self, $ip) = @_;
+sub prefixinfo($$$) {
+  my ($self, $ip, $exclude) = @_;
   $ip->isa('NetAddr::IP') or
     die("IPAM::prefixinfo: invalid argument");
   my %prefixinfo;
@@ -1366,6 +1423,8 @@ sub prefixinfo($$) {
       map { { prefix => $_->name(),
               name => $_->id() } } @path;
   }
+  $exclude and
+    map { _exclude_json_element(\%prefixinfo, @{$_}) } @{$exclude->{prefix}};
   return(\%prefixinfo);
 }
 

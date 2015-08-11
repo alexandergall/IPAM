@@ -48,9 +48,7 @@ sub walk_registry($) {
       if (($opt{type} eq 'net' and $prefix->is_stub()) or
           ($opt{type} eq 'block' and not $prefix->is_stub())) {
         if ($opt{json}) {
-          my $raw = $ipam->prefixinfo($prefix->ip());
-          map { delete_element($raw, @{$_}) } @{$exclude{prefix}};
-          push(@json, $raw);
+          push(@json, $ipam->prefixinfo($prefix->ip(), \%exclude));
         } else {
           print $prefix->name()."\n";
           if ($opt{detail}) {
@@ -63,27 +61,6 @@ sub walk_registry($) {
       }
     }
     walk_registry($prefix->registry()) unless $prefix->is_stub();
-  }
-}
-
-sub delete_element($@);
-sub delete_element($@) {
-  my ($href, @elts) = @_;
-  if (@elts > 1) {
-    my @next;
-    push(@next, shift @elts);
-    if ($next[0] eq '*') {
-      @next = keys(%{$href});
-    }
-    foreach my $next (@next) {
-      if (ref $href->{$next} eq 'ARRAY') {
-        map { delete_element(\%{$_}, @elts) } @{$href->{$next}};
-      } else {
-        delete_element(\%{$href->{$next}}, @elts);
-      }
-    }
-  } else {
-    delete $href->{shift @elts};
   }
 }
 
@@ -112,9 +89,7 @@ if ($opt{type} eq 'subnet') {
   while (my $network = $next->()) {
     next unless $network->has_tags(@{$opt{tag}});
     if ($opt{json}) {
-      my $raw = ($ipam->nameinfo($network->name()))[1];
-      map { delete_element($raw, @{$_}) } @{$exclude{fqdn}};
-      push(@json, $raw);
+      push(@json, ($ipam->nameinfo($network->name(), \%exclude))[1]);
     } else {
       print $network->name()."\n";
       if ($opt{detail}) {
@@ -139,11 +114,7 @@ if ($opt{type} eq 'host') {
   }
   my @hosts_sorted = sort { $a->name() cmp $b->name() } @hosts;
   if ($opt{json}) {
-    foreach my $host (@hosts_sorted) {
-      my $raw = ($ipam->nameinfo($host->name()))[1];
-      map { delete_element($raw, @{$_}) } @{$exclude{fqdn}};
-      push(@json, $raw);
-    }
+      map { push(@json, ($ipam->nameinfo($_->name(), \%exclude))[1]) } @hosts_sorted;
   } else {
     map { print $_->name()."\n" } @hosts_sorted;
   }

@@ -112,27 +112,6 @@ sub recursion_level($) {
   print("=========== $mode recursion level $level\n");
 }
 
-sub delete_element($@);
-sub delete_element($@) {
-  my ($href, @elts) = @_;
-  if (@elts > 1) {
-    my @next;
-    push(@next, shift @elts);
-    if ($next[0] eq '*') {
-      @next = keys(%{$href});
-    }
-    foreach my $next (@next) {
-      if (ref $href->{$next} eq 'ARRAY') {
-        map { delete_element(\%{$_}, @elts) } @{$href->{$next}};
-      } else {
-        delete_element(\%{$href->{$next}}, @elts);
-      }
-    }
-  } else {
-    delete $href->{shift @elts};
-  }
-}
-
 sub name_info($$) {
   my ($fqdn, $indent) = @_;
   unless ($fqdn =~ /\.$/) {
@@ -146,12 +125,9 @@ sub name_info($$) {
   recursion_level(1);
   my $recurse_save = $opt{recurse};
   $opt{recurse} > 0 and $opt{recurse}--;
-  my ($info, $raw) = $ipam->nameinfo($fqdn);
-  if ($opt{json}) {
-    if (defined $raw) {
-      map { delete_element($raw, @{$_}) } @{$exclude{fqdn}};
-      push (@result, $raw);
-    }
+  my ($info, $raw) = $ipam->nameinfo($fqdn, \%exclude);
+  if ($opt{json} and defined $raw) {
+    push (@result, $raw);
   } else {
     defined $info or
       error("The IPAM contains no information about the domain name $fqdn");
@@ -269,12 +245,9 @@ sub prefix_info($$) {
   my $recurse_save = $opt{recurse};
   $opt{recurse}--;
   $opt{recurse} < 0 and $opt{recurse} = 0;
-  my $raw = $ipam->prefixinfo($ip);
-  if ($opt{json}) {
-    if (defined $raw) {
-      map { delete_element($raw, @{$_}) } @{$exclude{prefix}};
-      push (@result, $raw);
-    }
+  my $raw = $ipam->prefixinfo($ip, \%exclude);
+  if ($opt{json} and defined $raw) {
+    push (@result, $raw);
   } elsif ($raw) {
     if ($raw->{type} eq 'iid') {
       indent($indent, "$raw->{name} is an IPv6 interface identifier.\n");
