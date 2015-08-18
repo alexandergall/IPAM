@@ -1421,7 +1421,8 @@ sub prefixinfo($$$) {
     }
     @{$prefixinfo{path}} =
       map { { prefix => $_->name(),
-              name => $_->id() } } @path;
+              name => $_->id(),
+              subtype => $_->is_stub() ? 'stubnet' : 'block' } } @path;
   }
   $exclude and
     map { _exclude_json_element(\%prefixinfo, @{$_}) } @{$exclude->{prefix}};
