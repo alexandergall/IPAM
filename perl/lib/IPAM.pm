@@ -1410,9 +1410,10 @@ sub prefixinfo($$$) {
                                         $prefix->af());
         while (my $prefix = $next->()) {
           push(@{$prefixinfo{'next-level-prefixes'}},
-               { prefix => $prefix->name(),
+               { ($prefix->is_stub() ? 'prefix' : 'address') => $prefix->name(),
                  name => $prefix->id(),
-                 description => $prefix->description() });
+		 ($prefix->description() ?
+		  (description => $prefix->description()) : ()) });
         }
       }
     } else {
