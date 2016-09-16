@@ -59,8 +59,8 @@ system("cd $base_dir && make --silent cache-maybe-rebuild") == 0 or die;
 my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 
 while (<STDIN>) {
-  my ($router, $interface, $prefix, $address, $description) = split('%');
-  chomp($description);
+  chomp;
+  my ($router, $interface, $prefix, $address, $description, $state) = split('%');
   my $ip = NetAddr::IP->new($prefix) or
     die "Malformed prefix: $prefix";
   my $ip_addr = NetAddr::IP->new($address) or
@@ -68,9 +68,10 @@ while (<STDIN>) {
   my $cidr = $ip->cidr();
   $networks{$cidr}{ip} = $ip;
   push(@{$networks{$cidr}{interfaces}}, { name => $interface,
-					  router => $router,
-					  addr => $ip_addr,
-					  desc => $description, });
+                                          router => $router,
+                                          addr => $ip_addr,
+                                          desc => $description,
+                                          state => $state, });
 }
 
 foreach my $item (@ARGV) {
@@ -88,7 +89,7 @@ foreach my $item (@ARGV) {
     unless ($item =~ /\.$/) {
       $item .= '.';
       unless ($item =~ /(\.|^)$opt{'default-domain'}$/) {
-	$item .= $opt{'default-domain'};
+        $item .= $opt{'default-domain'};
       }
     }
     my ($network, @prefixes);
@@ -96,8 +97,8 @@ foreach my $item (@ARGV) {
       @prefixes = $network->prefixes(sub { $_[0]->ip() <=> $_[1]->ip(); });
     } else {
       unless (@prefixes = $ipam->address_map()->lookup_by_id($item)) {
-	warn "Unknown prefix or subnet $item";
-	next;
+        warn "Unknown prefix or subnet $item";
+        next;
       }
     }
     print "$item\n";
@@ -115,6 +116,7 @@ sub router_info($$) {
     foreach my $if (@{$networks{$cidr}{interfaces}}) {
       indent($indent, "Router: ".$if->{router}."\n");
       indent($indent+1, "Interface: ".$if->{name}."\n");
+      indent($indent+1, "Admin state: ".$if->{state}."\n");
       $if->{desc} and indent($indent+1, "Description: ".$if->{desc}."\n");
     }
   } else {
