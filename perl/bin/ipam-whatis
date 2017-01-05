@@ -266,8 +266,9 @@ sub prefix_info($$) {
         indent($indent+1, "It is an address block.\n");
       } else {
         indent($indent+1, "It is a stub network.\n");
+        indent($indent+1, "It has the name ".$raw->{'assigned-to'}."\n");
         if ($raw->{subnet}) {
-          indent($indent+1, "It is assigned to the subnet $raw->{subnet}\n");
+          indent($indent+1, "It is assigned to a subnet\n");
           $opt{recurse} and name_info($raw->{'subnet'}, $indent+2);
         } else {
           indent($indent+1, "It is not assigned to any subnet\n");
