@@ -513,12 +513,28 @@ sub _register_address_map($$) {
 				  $map_node->findnodes('block|net'));
 }
 
-### Recursively register all address blocks contained in a given
-### block (i.e. prefix).  This also generates the DNS entries for
-### all "stub-prefixes" (i.e. IP subnets).  Currently, blocks that
-### are not stub-prefixes are not visible in the DNS.  In order to do that,
-### we would have to have a method to define a prefix length for IPv6, which
-### we don't (a NET-* AAAA always defines a /64).
+### Recursively register all address blocks contained in a given block
+### (i.e. prefix).  This also generates the DNS entries for all
+### prefixes using the APL DNS RRs (RFC3123).  For legacy reasons, we
+### also use a non-standard method to store prefix information using
+### PTR and A/AAAA RRs.  For IPv4 , the address part of the prefix is
+### stored as a PTR RR and the netmask as an A RR. For example,
+### 130.59.17.64/26 is represented as
+###
+###   PTR 130.59.17.64.
+###   A   255.255.255.192
+###
+### An IPv6 prefix is simply represented as a AAAA record with an
+### implied prefix length of /64.  The latter is the reason for only
+### generating these records for stub-prefixes.  The APL RR does, of
+### course, not have this limitation.
+my %iana_afi =
+  (
+   ## Mappings for
+   ## http://www.iana.org/assignments/address-family-numbers/address-family-numbers.xhtml
+   4 => 1,
+   6 => 2,
+  );
 sub _register_address_blocks($$@);
 sub _register_address_blocks($$@) {
   my ($self, $prefix_upper, @nodes) = @_;
@@ -542,8 +558,8 @@ sub _register_address_blocks($$@) {
     $type eq 'net' and $plen = $af_info{$prefix->af()}{max_plen};
     eval { $prefix->plen($plen) } or $self->_die_at($node, $@);
     eval { $prefix_upper->add($prefix) } or $self->_die_at($node, $@);
+    my @nodeinfo = IPAM::_nodeinfo($node);
     if ($type eq 'net') {
-      my @nodeinfo = IPAM::_nodeinfo($node);
       if ($prefix->af() == 4) {
 	eval { $self->{zone_r}->add_rr($fqdn, undef, 'PTR',
 				       $prefix->ip()->addr().'.',
@@ -560,6 +576,11 @@ sub _register_address_blocks($$@) {
 					 $self->_die_at($node, $@);
       }
     }
+    eval { $self->{zone_r}->add_rr($fqdn, undef, 'APL',
+                                   $iana_afi{$prefix->af()}.":"
+                                   .$prefix->ip()->cidr(), undef, 1,
+                                   @nodeinfo) } or
+                                     $self->die_at($node, $@);
     $self->_register_address_blocks($prefix, $node->findnodes('block|net'));
   }
 }
@@ -1412,7 +1433,7 @@ sub prefixinfo($$$) {
           push(@{$prefixinfo{'next-level-prefixes'}},
                { prefix => $prefix->name(),
                  name => $prefix->id(),
-		 description => $prefix->description() });
+                 description => $prefix->description() });
         }
       }
     } else {
