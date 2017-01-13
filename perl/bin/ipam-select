@@ -77,7 +77,7 @@ foreach my $exclude (@{$opt{'json-exclude'}}) {
     push(@{$exclude{$type}}, [ split(':', $spec) ]);
   }
 }
-system("cd $base_dir && make --silent cache-maybe-rebuild") == 0 or die;
+system("cd $base_dir && make --no-print-directory --silent cache-maybe-rebuild") == 0 or die;
 $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 
 if (grep /^$opt{type}$/, qw/block net/) {

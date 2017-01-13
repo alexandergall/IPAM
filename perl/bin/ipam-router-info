@@ -55,7 +55,7 @@ GetOptions(\%opt, 'default-domain=s') or usage();
 $opt{'default-domain'} =~ /\.$/ or
   die "The default domain must end with a dot.\n";
 @ARGV or usage();
-system("cd $base_dir && make --silent cache-maybe-rebuild") == 0 or die;
+system("cd $base_dir && make --no-print-directory --silent cache-maybe-rebuild") == 0 or die;
 my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 
 while (<STDIN>) {

@@ -11,6 +11,7 @@ DUMP = xmllint --xinclude
 DIFF = diff
 DATE = date --rfc-3339=seconds
 MD5 = md5sum
+MK_SILENT = $(MAKE) --silent --no-print-directory
 
 CONFIRM = y
 comma = ,
@@ -167,7 +168,7 @@ endef
 ### This macro completes with an exit status of 0 if the given 
 ### target needs to be remade, >0 otherwise
 define needs_update_p
-! { $(MAKE) --silent update-md5 && $(MAKE) -q $(1) REBUILD_MD5=; }
+! { $(MK_SILENT) update-md5 && $(MK_SILENT) -q $(1) REBUILD_MD5=; }
 endef
 
 VALIDATE_PREREQS := .networks-auto-include ipam.xml alternatives.xml address-map.xml zones.xml iid.xml $(NETWORKS_FILES) $(BLOCKS_FILES)
@@ -312,13 +313,13 @@ show-rcs-locks:
 
 ### Show only the user's own RCS locks
 show-my-rcs-locks:
-	@$(MAKE) --silent show-rcs-locks LOCKER="-l$(USER)"
+	@$(MK_SILENT) show-rcs-locks LOCKER="-l$(USER)"
 
 ### Display information about the current state of the database.
 info:
 	@set -e; \
-	[ -z "$(INFO_NO_SHOW_LOCK)" ] && $(MAKE) --silent show-lock || true; \
-	rcs_locks=`$(MAKE) --silent show-rcs-locks`; \
+	[ -z "$(INFO_NO_SHOW_LOCK)" ] && $(MK_SILENT) show-lock || true; \
+	rcs_locks=`$(MK_SILENT) show-rcs-locks`; \
 	if [ -n "$$rcs_locks" ]; then \
 		$(call err,There are RCS locks on the following files:); \
 		echo "$$rcs_locks"; \
@@ -335,7 +336,7 @@ info:
 			$(call msg,The following files contain pending changes:); \
 			echo -e "$$files"; \
 		fi; \
-		diff=`$(MAKE) --silent diff 2>&1` || true; \
+		diff=`$(MK_SILENT) diff 2>&1` || true; \
 		if [ -n "$$diff" ]; then \
 			$(call msg,The following changes are not yet commited to RCS:); \
 			echo; \
@@ -361,7 +362,7 @@ lock:
 			cat .lock; \
 		  fi; \
 		  exit 1; }; \
-	$(MAKE) --silent .lock
+	$(MK_SILENT) .lock
 
 ### Lock the database even when it is not clean
 lock-force: export LOCK_FORCE=y
@@ -375,7 +376,7 @@ lock-msg: lock
 .lock:
 	@umask 002; \
 	set -e; \
-	status=`$(MAKE) --silent info INFO_NO_SHOW_LOCK=y 2>&1`; \
+	status=`$(MK_SILENT) info INFO_NO_SHOW_LOCK=y 2>&1`; \
 	if [ -n "$$status" -a -z "$(LOCK_FORCE)" ]; then \
 		$(call err,The database is unlocked but it is not in a clean state.  Use 'make info' for more details.); \
 		$(call msg,Try to clear this condition or use 'make lock-force' to obtain the lock.); \
@@ -397,7 +398,7 @@ lock-msg: lock
 	fi; \
 	if [ ! -f $(IPAM_ARCHIVE_RCS) ]; then \
 		$(call msg,Initializing IPAM archive.); \
-		$(MAKE) --silent dump >$(IPAM_ARCHIVE); \
+		$(MK_SILENT) dump >$(IPAM_ARCHIVE); \
 		ci -t-"IPAM archive" $(IPAM_ARCHIVE); \
 	fi; \
 	trap - INT TERM EXIT; \
@@ -447,7 +448,7 @@ unlock:
 	locker="$(call owner_of,.lock)"; \
 	self="$(call self)"; \
 	if [ $$locker == $$self ]; then \
-		status=`$(MAKE) --silent info INFO_NO_SHOW_LOCK=y 2>&1`; \
+		status=`$(MK_SILENT) info INFO_NO_SHOW_LOCK=y 2>&1`; \
 		if [ -n "$$status" ]; then \
 			$(call err,The lock cannot be removed unless the IPAM is in a clean state.); \
 			$(call msg,Use 'make info' for more details.); \
@@ -456,7 +457,7 @@ unlock:
 		$(call msg,Updating IPAM archive.); \
 		lock_history="`$(DATE)` U $$self $$locker"; \
 		co -l $(IPAM_ARCHIVE); \
-		$(MAKE) --silent dump >$(IPAM_ARCHIVE); \
+		$(MK_SILENT) dump >$(IPAM_ARCHIVE); \
 		ci -f -m"$$lock_history" $(IPAM_ARCHIVE); \
 		echo "$$lock_history" >>.lock-history; \
 		rm -f .lock; \

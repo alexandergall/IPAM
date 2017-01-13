@@ -26,7 +26,7 @@ GetOptions(\%opt, 'warnings', 'verbose') or usage();
 my $file = "$base_dir/ipam.xml";
 my $cache_file = $ARGV[0] =~ m%^/% ? $ARGV[0] :
   "$base_dir/$ARGV[0]";
-system("cd $base_dir && make --silent validate") == 0 or die;
+system("cd $base_dir && make --no-print-directory --silent validate") == 0 or die;
 my $ipam = IPAM->new({ verbose => $opt{verbose}, base_dir => $base_dir,
 		       validate => undef, warnings => $opt{warnings} });
 $ipam->load($file);

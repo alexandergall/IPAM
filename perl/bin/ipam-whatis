@@ -56,7 +56,7 @@ $opt{recurse} < 0 and $opt{recurse} = 0;
 $recurse = $opt{recurse};
 $opt{'default-domain'} =~ /\.$/ or 
   die "The default domain must end with a dot.\n";
-system("cd $base_dir && make --silent cache-maybe-rebuild") == 0 or die;
+system("cd $base_dir && make --no-print-directory --silent cache-maybe-rebuild") == 0 or die;
 my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 
 foreach my $item (@ARGV) {

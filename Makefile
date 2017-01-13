@@ -36,3 +36,12 @@ $(INSTALL_DIR)/blocks/schemas.xml: schemas/schemas-blocks.xml.in
 
 $(INSTALL_DIR)/%.rnc: %.rnc
 	$(INSTALL) -m 444 $< -D $@
+
+initialize:
+	for f in ipam.xml address-map.xml alternatives.xml iid.xml zones.xml; do \
+	  [ -f $(INSTALL_DIR)/$$f ] || \
+	    $(INSTALL) -m 644 init/$$f $(INSTALL_DIR); \
+	done
+	[ -d $(INSTALL_DIR)/RCS ] || $(INSTALL) -m02775 -d $(INSTALL_DIR)/RCS
+	[ -f $(INSTALL_DIR)/validate ] || \
+	  { cd $(INSTALL_DIR) && make lock-force && make && make unlock; }
