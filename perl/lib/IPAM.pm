@@ -580,7 +580,7 @@ sub _register_address_blocks($$@) {
                                    $iana_afi{$prefix->af()}.":"
                                    .$prefix->ip()->cidr(), undef, 1,
                                    @nodeinfo) } or
-                                     $self->die_at($node, $@);
+                                     $self->_die_at($node, $@);
     $self->_register_address_blocks($prefix, $node->findnodes('block|net'));
   }
 }
