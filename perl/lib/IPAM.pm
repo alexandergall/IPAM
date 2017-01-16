@@ -1242,10 +1242,9 @@ sub nameinfo($$$) {
     my %isa_subnet;
     $fqdn{'is-a'}{subnet} = \%isa_subnet;
     _detail($network, \%isa_subnet);
-    if (my @hosts = $network->hosts(sub {
-                                      $_[0]->name() cmp $_[1]->name() })) {
-      @{$isa_subnet{hosts}} = map { $_->name() } @hosts;
-    }
+    my @hosts = $network->hosts(sub {
+                                  $_[0]->name() cmp $_[1]->name() });
+    @{$isa_subnet{hosts}} = map { $_->name() } @hosts;
   }
   if ($info{block}) {
     foreach my $prefix (@{$info{block}}) {
