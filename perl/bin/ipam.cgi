@@ -5,7 +5,6 @@ use CGI;
 use FileHandle;
 
 my $IPAM_BASE = '/home/noc/IPAM';
-my $IPAM_BIN = $IPAM_BASE.'/bin';
 my (@handles, @output);
 my $cmd;
 my $content_type = 'text/plain';
@@ -22,6 +21,13 @@ $ENV{REQUEST_METHOD} eq 'GET' or error_501();
 my @parms = $q->param();
 $parms[0] eq 'cmd' or error_400('Missing cmd parameter');
 shift(@parms);
+if ($parms[0] eq 'base') {
+  my $path = $q->param('base');
+  $IPAM_BASE = $path;
+  shift(@parms);
+}
+$ENV{IPAM_BASE} = $IPAM_BASE;
+my $IPAM_BIN = $IPAM_BASE.'/bin';
 my @args;
 foreach my $parm (@parms) {
   my $arg = $q->param($parm);
