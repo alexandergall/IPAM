@@ -47,7 +47,7 @@ sub indent($$);
 sub next_block($);
 sub filler($$$);
 sub msb($);
-sub lsb($);
+sub lsb($$);
 sub ip_to_bigint($);
 sub bigint_to_ip($$$);
 
@@ -231,7 +231,7 @@ sub filler($$$) {
     ## The number of rightmost zero bist in the prefix of $start gives
     ## the maximum possible aggregation for this prefix.  The overlap
     ## of $start and $end is an upper bound for this aggregation.
-    my $max_aggr = lsb($start_b);
+    my $max_aggr = lsb($start_b, $af{$af}{bits});
     my $overlap = msb($start_b->copy()->bxor($end_b));
     $peff = $af{$af}{bits} - ($max_aggr < $overlap ? $max_aggr : $overlap);
   } else {
@@ -251,11 +251,11 @@ sub msb($) {
 
 ### Return the position of the least significant bit of a
 ### Math::BigInt
-sub lsb($) {
-  my ($n) = @_;
+sub lsb($$) {
+  my ($n, $max) = @_;
   my $c = $n->copy();
   my $pos = 0;
-  while ($c->copy()->band(1)->is_zero()) {
+  while ($pos < $max and $c->copy()->band(1)->is_zero()) {
     $pos++;
     $c->brsft(1);
   }
