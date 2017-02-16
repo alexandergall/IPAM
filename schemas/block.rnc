@@ -9,6 +9,33 @@ net = element net {
    element description { text }?
 }
 
+netname = element netname { text }
+
+inetnum = element inetnum {
+   (element RIPE {
+      netname?
+   }? &
+   element SWITCH {
+      netname,
+      element site { text },
+      element aut-sys { text },
+      element services { text }
+   }?)
+}
+
+netBlockRange = ( net* & block* & range* &
+      element xi:include {
+         attribute href { text },
+         empty
+      }*)
+
+range = element range {
+   attribute start { text },
+   attribute end { text },
+   inetnum?,
+   netBlockRange
+}
+
 block = element block {
    attribute xml:base { text }?,
    attribute prefix { text },
@@ -16,9 +43,12 @@ block = element block {
    attribute plen { xsd:integer }?,
    attribute tag { text }?,
    element description { text }?,
-   ( net* & block* &
-      element xi:include {
-         attribute href { text },
-         empty
-      }*)
+   inetnum?,
+   element route {
+      element RIPE {
+         element descr { text }+,
+         element origin { text }
+      }*
+   }?,
+   netBlockRange
 }

@@ -1,0 +1,53 @@
+#!/usr/bin/perl
+
+my $base_dir;
+BEGIN {
+  $base_dir = '/home/noc/IPAM';
+  if (exists $ENV{IPAM_BASE}) {
+    $base_dir = $ENV{IPAM_BASE};
+  }
+}
+use strict;
+use warnings;
+use lib "$base_dir/lib/perl5";
+use IPAM 0.01;
+use Getopt::Long;
+use JSON;
+
+my %opt;
+
+sub usage() {
+  print <<"EOF";
+usage: $0 [--json [= pretty]] [--attribute=<attr>=<pattern> ... ] <SOURCE> <TYPE> [<TYPE> ...]
+EOF
+exit(1);
+}
+
+GetOptions(\%opt, "json:s", "attribute=s@") or usage();
+(defined $opt{json} and ((not $opt{json} or $opt{json} eq 'pretty') or usage()));
+@ARGV >= 2 or usage();
+my $source = shift;
+my @types = @ARGV;
+my %predicates;
+foreach (@{$opt{attribute}}) {
+  (my ($attr, $pattern) = split(/=/)) == 2
+    or usage();
+  $predicates{$attr} = sub { shift =~ /$pattern/ };
+}
+system("cd $base_dir && make --no-print-directory --silent cache-maybe-rebuild") == 0 or die;
+my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
+my $rr_r = $ipam->registry(IPAM::REG_RR);
+
+my @rrs;
+map { push(@rrs,  $rr_r->lookup_by_attributes($source, $_, \%predicates)) } @types;
+if (defined $opt{json}) {
+  my %json;
+  map { push(@{$json{$_->type()}}, [ $_->attributes ]) } @rrs;
+  print to_json(\%json, { pretty => $opt{json} eq 'pretty' ? 1 : 0 });
+} else {
+  map { print $_->dump(); print "\n" } @rrs;
+}
+
+## Local Variables:
+## mode: CPerl
+## End:

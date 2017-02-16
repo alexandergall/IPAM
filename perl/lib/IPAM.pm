@@ -148,18 +148,20 @@ use IPAM::Host;
 use IPAM::Zone;
 use IPAM::Domain;
 use IPAM::Alias;
+use IPAM::RR;
 
 our $VERSION = '0.01';
 
 our %af_info = ( 4 => { name => 'ipv4', max_plen => 32, rrtype => 'A', },
-		 6 => { name => 'ipv6', max_plen => 128, rrtype => 'AAAA' },
-	      );
+                 6 => { name => 'ipv6', max_plen => 128, rrtype => 'AAAA', },
+               );
 
 use constant { REG_ZONE => 'zone',
 	       REG_IID => 'iid',
 	       REG_NETWORK => 'network',
 	       REG_ALTERNATIVE => 'alternative',
                REG_ALIAS => 'alias',
+               REG_RR => 'inetnum',
 	     };
 
 my %default_options = ( verbose => undef,
@@ -179,6 +181,8 @@ my %registries = ( IPAM::REG_ZONE => { key => 'zone_r',
 					      'IPAM::Alternative::Registry' },
 		   IPAM::REG_ALIAS => { key => 'alias_r',
                                         module => 'IPAM::Alias::Registry' },
+		   IPAM::REG_RR => { key => 'rr_r',
+                                     module => 'IPAM::RR::Registry' },
 		 );
 
 my %serializer_opts = ( serializer => 'Storable' );
@@ -513,6 +517,61 @@ sub _register_address_map($$) {
 				  $map_node->findnodes('block|net'));
 }
 
+sub _collect_attributes($$@) {
+  my ($node, $func, @key_attrs) = @_;
+  my ($source, @attributes);
+  foreach my $source_node ($node->childNodes()) {
+    my $key = '';
+    ## Skip text nodes coming from white space between element
+    ## nodes (there probably is an API call that would do this for
+    ## you)
+    next unless $source_node->nodeType() == XML_ELEMENT_NODE;
+    $source = $source_node->getName();
+    foreach my $node ($source_node->childNodes()) {
+      next unless $node->nodeType() == XML_ELEMENT_NODE;
+      my $name = $node->nodeName();
+      my $data = $node->textContent();
+      grep /^$name$/, @key_attrs and $key .= "+$data";
+      push(@attributes, { $name => $data });
+    }
+    $func->($source_node, $source, $key, @attributes);
+  }
+}
+
+sub _register_inetnum($$@) {
+  my ($self, $node, $name, @prefixes) = @_;
+  $self->_verbose("Registering inetnum\n");
+  my $type = $prefixes[0]->af() == 4 ? 'inetnum' : 'inet6num';
+  _collect_attributes($node, sub {
+                        my ($node, $source, $key, @attributes) = @_;
+                        unshift(@attributes, { $type => $name });
+                        push(@attributes,
+                             { prefixes => join(' ', map { $_->ip()->short().'/'.$_->ip()->masklen() }
+                                                @prefixes) });
+                        my $rr = eval { IPAM::RR->new($node, $name.$key, $source,
+                                                      $type, @attributes,) }
+                          or $self->_die_at($node, $@);
+                        eval { $self->{rr_r}->add($rr) }
+                          or $self->_die_at($node, $@);
+                      });
+}
+
+sub _register_route($$$) {
+  my ($self, $node, $prefix) = @_;
+  $self->_verbose("Registering route\n");
+  my $type = $prefix->af() == 4 ? 'route' : 'route6';
+  my $name = $prefix->name();
+  _collect_attributes($node, sub {
+                        my ($node, $source, $key, @attributes) = @_;
+                        unshift(@attributes, { $type => $prefix->name() });
+                        my $rr = eval { IPAM::RR->new($node, $name.$key, $source,
+                                                      $type, @attributes) }
+                          or $self->_die_at($node, $@);
+                        eval { $self->{rr_r}->add($rr) }
+                          or $self->_die_at($node, $@);
+                      }, 'origin');
+}
+
 ### Recursively register all address blocks contained in a given block
 ### (i.e. prefix).  This also generates the DNS entries for all
 ### prefixes using the APL DNS RRs (RFC3123).  For legacy reasons, we
@@ -538,7 +597,61 @@ my %iana_afi =
 sub _register_address_blocks($$@);
 sub _register_address_blocks($$@) {
   my ($self, $prefix_upper, @nodes) = @_;
+  my @prefixes;
   foreach my $node (@nodes) {
+    if ($node->nodeName() eq "range") {
+      $prefix_upper->af() == 4
+        or $self->_die_at($node, "Invalid use of range in IPv6 context\n");
+      my @range = sort { $a->ip()->network()->bigint() <=>
+                           $b->ip()->network()->bigint() }
+        $self->_register_address_blocks($prefix_upper,
+                                        $node->findnodes('block|net|range'));
+      push(@prefixes, @range);
+      my ($start_ip, $end_ip) = map {
+        my $ip = NetAddr::IP->new($_)
+          or $self->_die_at($node, "Invalid address $_\n");
+        $ip->version == 4
+          or $self->_die_at($node, "IPv6 address ".$ip->addr()
+                            ." found where IPv4 address expected\n");
+        $ip->masklen() == 32
+          or $self->_die_at($node,  "Prefix ".$ip->cidr()
+                            ." found where address expected\n");
+        $ip;
+      } map { $node->getAttribute($_) } qw/start end/;
+      sub block_info($) {
+        my ($b) = @_;
+        my $ip = $b->ip();
+        return $ip->cidr()." [ ".$ip->range()." ]";
+      }
+      unless ($start_ip->addr() eq $range[0]->ip()->network()->addr()) {
+        my $p = $range[0];
+        $self->_die_at($p, "First block ".block_info($p)
+                       ." not aligned with start of range "
+                       .$start_ip->addr()."\n");
+      }
+      my $last;
+      foreach my $p (@range) {
+        unless (defined $last) {
+          $last = $p;
+          next;
+        }
+        $p->ip()->network() - $last->ip()->broadcast() == 1
+          or $self->_die_at($p, "Non-adjacent blocks "
+                            .block_info($last).", ".block_info($p)
+                            ." in range\n");
+        $last = $p;
+      }
+      unless ($range[$#range]->ip()->broadcast->addr() eq $end_ip->addr()) {
+        my $p = $range[$#range];
+        $self->_die_at($p, "Last block ".block_info($p)
+                       ." not aligned with end of range "
+                       .$end_ip->addr()."\n");
+      }
+      my $name = $start_ip->addr()." - ".$end_ip->addr();
+      map { $self->_register_inetnum($_, $name, @range) }
+        $node->findnodes('inetnum');
+      next;
+    }
     my $fqdn = $self->_fqdn_from_node($node);
     my $type = $node->nodeName();
     my $plen = $node->getAttribute('plen');
@@ -581,8 +694,13 @@ sub _register_address_blocks($$@) {
                                    .$prefix->ip()->cidr(), undef, 1,
                                    @nodeinfo) } or
                                      $self->_die_at($node, $@);
-    $self->_register_address_blocks($prefix, $node->findnodes('block|net'));
+    map { $self->_register_inetnum($_, $prefix->name(), $prefix) }
+      $node->findnodes('inetnum');
+    map { $self->_register_route($_, $prefix) } $node->findnodes('route');
+    push(@prefixes, $prefix);
+    $self->_register_address_blocks($prefix, $node->findnodes('block|net|range'));
   }
+  return @prefixes;
 }
 
 ### Traverse a list of element nodes of type "iid" and populate the
