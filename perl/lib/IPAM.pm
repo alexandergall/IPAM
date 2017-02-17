@@ -693,8 +693,11 @@ sub _register_address_blocks($$@) {
                                    $iana_afi{$prefix->af()}.":"
                                    .$prefix->ip()->cidr(), undef, 1,
                                    @nodeinfo) } or
-                                     $self->_die_at($node, $@);
-    map { $self->_register_inetnum($_, $prefix->name(), $prefix) }
+      $self->_die_at($node, $@);
+    my $name = $prefix->af() == 4 ?
+      $prefix->ip()->network()->addr()." - ".$prefix->ip()->broadcast()->addr() :
+      $prefix->ip()->short()."/".$prefix->ip()->masklen();
+    map { $self->_register_inetnum($_, $name, $prefix) }
       $node->findnodes('inetnum');
     map { $self->_register_route($_, $prefix) } $node->findnodes('route');
     push(@prefixes, $prefix);
