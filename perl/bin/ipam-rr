@@ -12,6 +12,7 @@ use warnings;
 use lib "$base_dir/lib/perl5";
 use IPAM 0.01;
 use Getopt::Long;
+use NetAddr::IP;
 use JSON;
 
 my %opt;
@@ -21,6 +22,23 @@ sub usage() {
 usage: $0 [--json [= pretty]] [--attribute=<attr>=<pattern> ... ] <SOURCE> <TYPE> [<TYPE> ...]
 EOF
 exit(1);
+}
+
+sub sort_rrs($@) {
+  my ($type, @rrs) = @_;
+  if ($type =~ /^(inet6?num|route6?)$/) {
+    my $to_ip = sub {
+      my ($rr) = @_;
+      ## Pick the first word of the value of the first attribute,
+      ## which is assumed to be a prefix (either from the inetnum,
+      ## inet6num, route or route6 attribute)
+      my $first_attr = ($rr->attributes())[0];
+      my $addr = (split(/\s/, (values(%{$first_attr}))[0]))[0];
+      return NetAddr::IP->new($addr);
+    };
+    return sort { $to_ip->($a) <=> $to_ip->($b) } @rrs;
+  };
+  return @rrs;
 }
 
 GetOptions(\%opt, "json:s", "attribute=s@") or usage();
@@ -39,7 +57,7 @@ my $ipam = IPAM->new_from_cache("$base_dir/.ipam.cache");
 my $rr_r = $ipam->registry(IPAM::REG_RR);
 
 my @rrs;
-map { push(@rrs,  $rr_r->lookup_by_attributes($source, $_, \%predicates)) } @types;
+map { push(@rrs,  sort_rrs($_, $rr_r->lookup_by_attributes($source, $_, \%predicates))) } @types;
 if (defined $opt{json}) {
   my %json;
   map { push(@{$json{$_->type()}}, [ $_->attributes ]) } @rrs;
