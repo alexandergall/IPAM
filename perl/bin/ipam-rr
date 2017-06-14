@@ -24,19 +24,29 @@ EOF
 exit(1);
 }
 
+sub get_attribute($$) {
+  my ($rr, $name) = @_;
+  foreach my $attr ($rr->attributes()) {
+    grep /$name/, keys(%{$attr}) or next;
+    return (values(%{$attr}))[0];
+  }
+}
+
 sub sort_rrs($@) {
   my ($type, @rrs) = @_;
   if ($type =~ /^(inet6?num|route6?)$/) {
-    my $to_ip = sub {
-      my ($rr) = @_;
-      ## Pick the first word of the value of the first attribute,
-      ## which is assumed to be a prefix (either from the inetnum,
-      ## inet6num, route or route6 attribute)
-      my $first_attr = ($rr->attributes())[0];
-      my $addr = (split(/\s/, (values(%{$first_attr}))[0]))[0];
-      return NetAddr::IP->new($addr);
+    my $key = sub {
+      my ($rr) =@_;
+      my $sort_attr;
+      if ($type =~ /^inet6?num$/) {
+        $sort_attr = 'prefixes';
+      } else {
+        $sort_attr = $type;
+      }
+      my $key = (split(/\s+/, get_attribute($rr, $sort_attr)))[0];
+      return NetAddr::IP->new($key);
     };
-    return sort { $to_ip->($a) <=> $to_ip->($b) } @rrs;
+    return sort { $key->($a) <=> $key->($b) } @rrs;
   };
   return @rrs;
 }
