@@ -1,11 +1,12 @@
 export IPAM_BASE = @@IPAM_BASE@@
 
-PATH = /bin:/usr/bin:$(IPAM_BASE)/bin
+PATH = /bin:/usr/bin:$(IPAM_BASE)/bin:/home/noc/bin
 SHELL = /bin/bash
 
 JING = java -Dorg.apache.xerces.xni.parser.XMLParserConfiguration=org.apache.xerces.parsers.XIncludeParserConfiguration -jar /usr/share/java/jing.jar
 FIND = find
 GEN-ZONES = ipam-gen-zones --quiet --repeat-owner
+PUSH_ZONE = push-to-dns-master
 SERIALIZE = ipam-create-cache
 DUMP = xmllint --xinclude
 DIFF = diff
@@ -555,7 +556,7 @@ zones/.stamp: .ipam.cache zones/.links.stamp
 			if [ -f $${file}install ]; then \
 				 cp $${file}install $$file; \
 			else \
-				[ -h $${file}install ] || \
+				! [ -h $${file}install ] || ! [[ $$(readlink $${file}install) =~ \@ ]] && \
 					$(call msg,Zone $$zone (file $$file) requires manual update on the name server.); \
 				cp $$file_n $$file; \
 			fi; \
@@ -566,6 +567,9 @@ zones/.stamp: .ipam.cache zones/.links.stamp
 			echo; \
 			cat zones/diffs; \
 			echo; \
+		elif [[ $$(readlink $${file}install) =~ \@ ]] && [ -n "$(FORCE_PUSH)" ]; then \
+			files="$$files $$file"; \
+			$(call msg,Force update of remote zone $$zone); \
 		fi; \
 	done; \
 	proc_count=0; \
@@ -595,27 +599,50 @@ zones/.stamp: .ipam.cache zones/.links.stamp
 				continue; \
 			fi; \
 			dest=`readlink $${file}install`; \
-			[ -f $$dest ] || touch $$dest; \
-			rm -f $$dest.old; \
-			mv $$dest $$dest.old; \
-			cp $$file $$dest; \
-			dir=`dirname $$dest`; \
-			if [ -f $$dir/Makefile ]; then \
-				(cd $$dir && make); \
-				((++update_count)); \
+			if ! [[ $$dest =~ \@ ]]; then \
+				[ -f $$dest ] || touch $$dest; \
+				rm -f $$dest.old; \
+				mv $$dest $$dest.old; \
+				cp $$file $$dest; \
+				dir=`dirname $$dest`; \
+				if [ -f $$dir/Makefile ]; then \
+					(cd $$dir && make); \
+					((++update_count)); \
+				else \
+					zone=`basename $$file`; \
+					$(call msg,Zone $$zone: Makefile missing in $$dir.); \
+					((++skipped_count)); \
+				fi; \
 			else \
-				zone=`basename $$file`; \
-				$(call msg,Zone $$zone: Makefile missing in $$dir.); \
-				((++skipped_count)); \
+				components=($${dest//\@/ }); \
+				if [ $${#components[*]} -eq 2 ]; then \
+					zone_dir=$${components[0]}; \
+					host=$${components[1]}; \
+					zone=`basename $$file`; \
+					$(call msg,Updating $$zone on $$host (directory $$zone_dir)); \
+					if $(PUSH_ZONE) -h $${host} $${file} $${zone_dir} d.ipam; then \
+						((++update_count)); \
+					else \
+						$(call msg,Zone update failed.); \
+						((++skipped_count)); \
+					fi; \
+				else \
+					$(call msg,Invalid remote host specifier $${dest}); \
+					((++skipped_count)); \
+				fi; \
 			fi; \
 		done; \
 		$(call msg,Update completed. $$proc_count $(call plural,$$proc_count,zone) processed$(comma) $$update_count commited.); \
 		[ $$manual_count -gt 0 ] && $(call msg,$$manual_count $(call plural,$$manual_count,zone) marked for manual update.); \
-		[ $$skipped_count -gt 0 ] && $(call msg,$$skipped_count $(call plural,$$skipped_count,zone) not updated due to missing Makefile.); \
+		[ $$skipped_count -gt 0 ] && $(call msg,$$skipped_count $(call plural,$$skipped_count,zone) not updated due to errors.); \
 	else \
 		$(call msg,All zones are up to date.); \
 	fi; \
 	touch $@
+
+zones-force:
+	@rm -f zones/.stamp
+	@$(MAKE) zones FORCE_PUSH=y
 
 ### The zone snippets are written to the directory "zones" within the
 ### IPAM.  Each zone has associated with it a symbolic link named
@@ -631,7 +658,13 @@ zones/.links.stamp: md5/zones.xml.md5
 	trap cleanup INT TERM EXIT; \
 	mkdir zones.new; \
 	$(GEN-ZONES) --conf | while read zone dir; do \
-		[ -n "$$dir" ] && ln -s $$dir/d.ipam zones.new/$${zone}install; \
+		if [ -n "$$dir" ]; then \
+			if [[ $$dir =~ \@ ]]; then \
+				ln -s `basename $$dir` zones.new/$${zone}install; \
+			else \
+				ln -s $$dir/d.ipam zones.new/$${zone}install; \
+			fi; \
+		fi; \
 		[ -f zones/$$zone ] && cp -p zones/$$zone zones.new || true; \
 	done; \
 	mv zones zones.old; \
