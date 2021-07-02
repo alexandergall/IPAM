@@ -20,6 +20,7 @@ inetnum = element inetnum {
       netname,
       element site { text },
       element aut-sys { text },
+      element rtbh-group { text },
       element services { text }
    }?)
 }
