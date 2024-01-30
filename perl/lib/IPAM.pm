@@ -575,18 +575,14 @@ sub _register_route($$$) {
 ### Recursively register all address blocks contained in a given block
 ### (i.e. prefix).  This also generates the DNS entries for all
 ### prefixes using the APL DNS RRs (RFC3123).  For legacy reasons, we
-### also use a non-standard method to store prefix information using
-### PTR and A/AAAA RRs.  For IPv4 , the address part of the prefix is
-### stored as a PTR RR and the netmask as an A RR. For example,
-### 130.59.17.64/26 is represented as
+### also use a non-standard method to store IPv4 prefix information
+### using PTR and A RRs.  The address part of the prefix is stored as
+### a PTR RR and the netmask as an A RR. For example, 130.59.17.64/26
+### is represented as
 ###
 ###   PTR 130.59.17.64.
 ###   A   255.255.255.192
 ###
-### An IPv6 prefix is simply represented as a AAAA record with an
-### implied prefix length of /64.  The latter is the reason for only
-### generating these records for stub-prefixes.  The APL RR does, of
-### course, not have this limitation.
 my %iana_afi =
   (
    ## Mappings for
@@ -672,22 +668,15 @@ sub _register_address_blocks($$@) {
     eval { $prefix->plen($plen) } or $self->_die_at($node, $@);
     eval { $prefix_upper->add($prefix) } or $self->_die_at($node, $@);
     my @nodeinfo = IPAM::_nodeinfo($node);
-    if ($type eq 'net') {
-      if ($prefix->af() == 4) {
-	eval { $self->{zone_r}->add_rr($fqdn, undef, 'PTR',
-				       $prefix->ip()->addr().'.',
-				       undef, 1, @nodeinfo) } or
-					 $self->_die_at($node, $@);
-	eval { $self->{zone_r}->add_rr($fqdn, undef, 'A',
-				       $prefix->ip()->mask(), undef, 1,
-				       @nodeinfo) } or
-					 $self->_die_at($node, $@);
-      } else {
-	eval { $self->{zone_r}->add_rr($fqdn, undef, 'AAAA',
-				       $prefix->ip()->addr(), undef, 1,
-				       @nodeinfo) } or
-					 $self->_die_at($node, $@);
-      }
+    if ($type eq 'net' and $prefix->af() == 4) {
+      eval { $self->{zone_r}->add_rr($fqdn, undef, 'PTR',
+				     $prefix->ip()->addr().'.',
+				     undef, 1, @nodeinfo) } or
+				       $self->_die_at($node, $@);
+      eval { $self->{zone_r}->add_rr($fqdn, undef, 'A',
+				     $prefix->ip()->mask(), undef, 1,
+				     @nodeinfo) } or
+				       $self->_die_at($node, $@);
     }
     eval { $self->{zone_r}->add_rr($fqdn, undef, 'APL',
                                    $iana_afi{$prefix->af()}.":"
