@@ -1,0 +1,170 @@
+{
+    "swagger": "2.0",
+    "info": { "version": "1.0", "title": "IPAM" },
+    "basePath": "/api/v1",
+    "definitions": {
+	"error": {
+	    "type": "object",
+	    "properties": {
+		"status": {
+		    "type": "integer"
+		},
+		"message": {
+		    "type": "string"
+		}
+	    },
+	    "required": [ "status", "message" ]
+	}
+    },
+    "paths": {
+        "/info": {
+            "get": {
+                "operationId": "info",
+                "x-mojo-name": "info",
+                "summary": "Query information about a name or a prefix",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "name",
+                        "description": "FQDN",
+                        "collectionFormat": "multi",
+                        "type": "array"
+                    },
+                    {
+                        "in": "query",
+                        "name": "prefix",
+                        "description": "Address or prefix",
+                        "collectionFormat": "multi",
+                        "type": "array"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Information about a name or a prefix",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+			    "$ref": "#/definitions/error"
+			}
+                    }
+                }
+            }
+        },
+        "/select": {
+            "get": {
+                "operationId": "select",
+                "x-mojo-name": "select",
+                "summary": "Fetch objects based on tag values",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "type",
+                        "description": "Object type, one of block, net, subnet, host",
+                        "type": "string",
+                        "enum": [
+                            "block",
+                            "net",
+                            "subnet",
+                            "host"
+                        ],
+                        "default": "subnet"
+                    },
+                    {
+                        "in": "query",
+                        "name": "tag",
+                        "description": "Perl regular expression to match against tags",
+                        "collectionFormat": "multi",
+                        "type" : "array"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "IPAM objects that match the requested tag patterns",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/rr": {
+            "get": {
+                "operationId": "rr",
+                "x-mojo-name": "rr",
+                "summary": "Fetch resource registry objects",
+                "produces": [
+                    "application/json"
+                ],
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "source",
+                        "description": "Source type, one of SWITCH, RIPE",
+                        "type": "string",
+                        "enum": [
+                            "SWITCH",
+                            "RIPE"
+                        ],
+                        "default": "SWITCH"
+                    },
+                    {
+                        "in": "query",
+                        "name": "type",
+                        "description": "Object type, one of inetnum, inet6num",
+                        "collectionFormat": "multi",
+                        "type": "array",
+			"items": {
+			    "type": "string",
+                            "enum": [
+				"inetnum",
+				"inet6num"
+                            ]
+			},
+			"default": [ "inetnum", "inet6num" ]
+                    },
+		    {
+			"in": "query",
+			"name": "attribute",
+			"description": "Perl regex to match an attribute <attrib>=<regex>",
+			"collectionFormat": "multi",
+			"type": "array",
+			"items": {
+			    "type": "string"
+			}
+		    },
+		    {
+			"in": "query",
+			"name": "raw",
+			"description": "Produce text/plain output",
+			"type": "boolean",
+			"default": "false"
+		    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "IPAM resource registry objects",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+			    "$ref": "#/definitions/error"
+			}
+                    }
+                }
+            }
+        }
+    }
+}

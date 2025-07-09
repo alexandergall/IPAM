@@ -11,7 +11,7 @@ define transform
 	rm -f $<.tmp
 endef
 
-install: $(DIRS) install.perl $(INSTALL_DIR)/Makefile $(SCHEMAS) $(LOCATING_FILES)
+install: $(DIRS) install.perl $(INSTALL_DIR)/Makefile $(SCHEMAS) $(LOCATING_FILES) $(INSTALL_DIR)/api
 
 $(DIRS):
 	$(INSTALL) -m02775 -d $@
@@ -36,6 +36,13 @@ $(INSTALL_DIR)/blocks/schemas.xml: schemas/schemas-blocks.xml.in
 
 $(INSTALL_DIR)/%.rnc: %.rnc
 	$(INSTALL) -m 444 $< -D $@
+
+api/ipam-api.service: api/ipam-api.service.in
+	sed -e 's%@@IPAM_BASE@@%$(INSTALL_DIR)%' $< > $@
+
+$(INSTALL_DIR)/api: api/ipam-api.service api/ipam-api-v1.json api/ipam-rest-server
+	$(INSTALL) -m02775 -d $@
+	$(INSTALL) -m02555 -t $@ $^
 
 initialize:
 	for f in ipam.xml address-map.xml alternatives.xml iid.xml zones.xml; do \

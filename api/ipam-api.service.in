@@ -1,0 +1,12 @@
+[Unit]
+Description=IPAM REST API server
+After=apache2
+
+[Service]
+Environment=IPAM_BASE=@@IPAM_BASE@@
+Environment=MOJO_LOG_LEVEL=info
+ExecStart=@@IPAM_BASE@@/api/ipam-api-server daemon -l http://localhost:3000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

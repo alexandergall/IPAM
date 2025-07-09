@@ -14,5 +14,5 @@ WriteMakefile(
 			  'bin/ipam-rr', 'bin/ipam.cgi', ],
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/IPAM.pm', # retrieve abstract from module
-       AUTHOR         => 'Alexander Gall <gall@switch.chb>') : ()),
+       AUTHOR         => 'Alexander Gall <gall@switch.ch>') : ()),
 );

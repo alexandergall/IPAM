@@ -1,0 +1,217 @@
+#!/usr/bin/perl
+
+my $base_dir;
+BEGIN {
+  $base_dir = '/home/noc/IPAM';
+  if (exists $ENV{IPAM_BASE}) {
+    $base_dir = $ENV{IPAM_BASE};
+  }
+}
+
+use strict;
+use warnings;
+use lib "$base_dir/lib/perl5";
+use IPAM 0.01;
+use NetAddr::IP;
+use Linux::Inotify2;
+use Mojolicious::Lite;
+
+my $inotify = new Linux::Inotify2
+  or die "unable to create new inotify object: $!";
+my $ipam_cache = "$base_dir/.ipam.cache";
+my $ipam;
+my $watch;
+$| = 1;
+
+sub load_IPAM {
+  my ($event) = @_;
+
+  if (not defined $event or not $event->IN_DELETE_SELF) {
+    if (-e $ipam_cache) {
+      printf("Loading IPAM cache $ipam_cache\n");
+      $ipam = IPAM->new_from_cache($ipam_cache) or die "Loading IPAM cache failed";
+    }
+  } else {
+    $watch = undef;
+  }
+}
+
+sub refresh {
+  unless ($watch) {
+    if ($watch = $inotify->watch ($ipam_cache, IN_ATTRIB|IN_MODIFY|IN_DELETE_SELF, \&load_IPAM)) {
+      load_IPAM();
+    } else {
+      warn "Setting up inotify handler for $ipam_cache failed: $!";
+    }
+  }
+  $inotify->poll;
+}
+
+$inotify->blocking(0);
+refresh();
+
+get("/info",
+    sub {
+      my $c = shift->openapi->valid_input or return;
+      my $req = $c->req;
+      my %response = ( result => [] );
+
+      refresh();
+      for my $fqdn (@{$req->params->every_param('name')}) {
+        my (undef, $info) = $ipam->nameinfo($fqdn);
+        if ($info) {
+          push(@{$response{result}}, $info);
+        }
+      }
+      for my $prefix (@{$req->params->every_param('prefix')}) {
+        my $ip = NetAddr::IP->new($prefix);
+        if ($ip) {
+          if (my $info = $ipam->prefixinfo($ip)) {
+            push(@{$response{result}}, $info);
+          }
+        } else {
+          $c->render(openapi =>
+                     {
+                      message => "Invalid prefix: $prefix",
+                      status => 400
+                     },
+                     status => 400);
+          return;
+        }
+      }
+      $c->render(openapi => \%response);
+    },
+    "info");
+
+my $sort_by_ip = sub { my ($a, $b) = @_; $a->ip() <=> $b->ip(); };
+my $sort_by_name = sub { my ($a, $b) = @_; $a->name() cmp $b->name(); };
+sub walk_registry($$$@);
+sub walk_registry($$$@) {
+  my ($reg, $result, $type, @tags) = @_;
+  my $next = $reg->iterator($sort_by_ip);
+  while (my $prefix = $next->()) {
+    if ($prefix->has_tags(@tags)) {
+      if (($type eq 'net' and $prefix->is_stub()) or
+          ($type eq 'block' and not $prefix->is_stub())) {
+        push(@{$result}, $ipam->prefixinfo($prefix->ip()));
+      }
+    }
+    walk_registry($prefix->registry(), $result, $type, @tags)
+      unless $prefix->is_stub();
+  }
+}
+
+get("/select",
+    sub {
+      my $c = shift->openapi->valid_input or return;
+      my $req = $c->req;
+      my %response = ( result => [] );
+
+      refresh();
+      my $type = $req->param('type');
+      my @tags = @{$req->params->every_param('tag')};
+
+      if (grep /^$type$/, qw/block net/) {
+        walk_registry($ipam->address_map()->registry(), \@{$response{result}}, $type, @tags);
+      }
+      if ($type eq 'subnet') {
+        my $next = $ipam->registry(IPAM::REG_NETWORK)->iterator($sort_by_name);
+        while (my $network = $next->()) {
+          next unless $network->has_tags(@tags);
+          push(@{$response{result}}, ($ipam->nameinfo($network->name()))[1]);
+        }
+      }
+
+      if ($type eq 'host') {
+        my @hosts;
+        my $next_net = $ipam->registry(IPAM::REG_NETWORK)->iterator();
+        while (my $network = $next_net->()) {
+          foreach my $host ($network->host_registry()->things()) {
+            next unless $host->has_tags(@tags);
+            push(@hosts, $host);
+          }
+        }
+        my @hosts_sorted = sort { $a->name() cmp $b->name() } @hosts;
+        map { push(@{$response{result}}, ($ipam->nameinfo($_->name()))[1]) } @hosts_sorted;
+      }
+
+      $c->render(openapi => \%response);
+    },
+    "select");
+
+sub get_attribute($$) {
+  my ($rr, $name) = @_;
+  foreach my $attr ($rr->attributes()) {
+    grep /$name/, keys(%{$attr}) or next;
+    return (values(%{$attr}))[0];
+  }
+}
+
+sub sort_rrs($@) {
+  my ($type, @rrs) = @_;
+  if ($type =~ /^(inet6?num|route6?)$/) {
+    my $key = sub {
+      my ($rr) =@_;
+      my $sort_attr;
+      if ($type =~ /^inet6?num$/) {
+        $sort_attr = 'prefixes';
+      } else {
+        $sort_attr = $type;
+      }
+      my $key = (split(/\s+/, get_attribute($rr, $sort_attr)))[0];
+      return NetAddr::IP->new($key);
+    };
+    return sort { $key->($a) <=> $key->($b) } @rrs;
+  };
+  return @rrs;
+}
+
+get ("/rr",
+     sub {
+       my $c = shift->openapi->valid_input or return;
+       my $req = $c->req;
+       my %response = ( result => [] );
+
+       refresh();
+       my $rr_r = $ipam->registry(IPAM::REG_RR);
+       my $source = $req->param('source');
+       my $raw = $req->param('raw');
+       my @types = @{$req->params->every_param('type')};
+
+       my %predicates;
+       foreach (@{$req->params->every_param('attribute')}) {
+         my ($attr, $pattern);
+         unless ((($attr, $pattern) = split(/=/)) == 2) {
+           $c->render(openapi =>
+                      {
+                       message => "Invalid attribute pattern: '$_'",
+                       status => 400
+                      },
+                      status => 400);
+           return;
+         }
+         $predicates{$attr} = sub { shift =~ /$pattern/ };
+       }
+
+       foreach (@types) {
+         foreach my $r (sort_rrs($_, $rr_r->lookup_by_attributes($source, $_, \%predicates))) {
+           if ($raw) {
+             push(@{$response{result}}, join("", $r->dump()));
+           } else {
+             push(@{$response{result}}, [ $r->attributes() ]);
+           }
+         }
+       }
+
+       if ($raw) {
+         $c->render( text => join("\n", @{$response{result}}),
+                     format => "txt");
+       } else {
+         $c->render(openapi => \%response);
+       }
+     },
+     "rr");
+
+plugin('OpenAPI',{url => app->home->rel_file('ipam-api-v1.json')});
+app->secrets('ohsh7dee0Oob');
+app->start;
