@@ -1,12 +1,16 @@
 [Unit]
 Description=IPAM REST API server
-After=apache2
+After=apache2.service
 
 [Service]
 Environment=IPAM_BASE=@@IPAM_BASE@@
 Environment=MOJO_LOG_LEVEL=info
 ExecStart=@@IPAM_BASE@@/api/ipam-rest-server daemon -l http://localhost:3000
-Restart=always
+## Restart if the exit code is either 0 or 10. The latter signals the condition
+## that the IPAM database has been reloaded a certain number of times and is
+## a wowrkaround to avoid high memory consumption due to a leak.
+Restart=on-success
+SuccessExitStatus=10
 
 [Install]
 WantedBy=multi-user.target
