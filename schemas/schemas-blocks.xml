@@ -1,4 +1,4 @@
 <?xml version="1.0"?>
 <locatingRules xmlns="http://thaiopensource.com/ns/locating-rules/1.0">
-  <uri pattern="*.xml" uri="@@IPAM_BASE@@/schemas/block.rnc"/>
+  <uri pattern="*.xml" uri="../schemas/block.rnc"/>
 </locatingRules>

@@ -25,14 +25,14 @@ perl/Makefile: perl/Makefile.PL
 $(INSTALL_DIR)/Makefile: Makefile.in
 	$(transform)
 
-$(INSTALL_DIR)/schemas.xml: schemas/schemas.xml.in
-	$(transform)
+$(INSTALL_DIR)/schemas.xml: schemas/schemas.xml
+	$(INSTALL) -m 444 $< $@
 
-$(INSTALL_DIR)/networks/schemas.xml: schemas/schemas-networks.xml.in
-	$(transform)
+$(INSTALL_DIR)/networks/schemas.xml: schemas/schemas-networks.xml
+	$(INSTALL) -m 444 $< $@
 
-$(INSTALL_DIR)/blocks/schemas.xml: schemas/schemas-blocks.xml.in
-	$(transform)
+$(INSTALL_DIR)/blocks/schemas.xml: schemas/schemas-blocks.xml
+	$(INSTALL) -m 444 $< $@
 
 $(INSTALL_DIR)/%.rnc: %.rnc
 	$(INSTALL) -m 444 $< -D $@
