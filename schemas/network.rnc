@@ -70,6 +70,8 @@ host = element host {
          ttl?
       }* &
       element rr {
+         ( attribute owner { text } |
+            attribute prefix { text })?,
          attribute type { text },
          ttl?,
          alternative?,

@@ -190,6 +190,13 @@ sub name_info($$) {
       $opt{recurse} and name_info($cname->{name}, $indent+2);
     }
 
+    foreach my $drv (@{$raw->{'is-a'}{derivative}}) {
+      my $host = $drv->{'derived-from'};
+      indent($indent, "Is derived from the host $host\n");
+      detail($indent+1, $drv);
+      $opt{recurse} and name_info($host, $indent+1);
+    }
+
     foreach my $host (@{$raw->{'is-a'}{host}}) {
       indent($indent, "Is a host that belongs to the network ".
              $host->{network}."\n");
@@ -209,6 +216,11 @@ sub name_info($$) {
                  alternative($_)."\n");
           $opt{recurse} and name_info($_->{name}, $indent+2);
         } @{$host->{aliases}};
+        map {
+          indent($indent+1, $_->{name}.' is dervied from the host'.
+                 alternative($_)."\n");
+          $opt{recurse} and name_info($_->{name}, $indent+2);
+        } @{$host->{derivatives}};
         map {
           indent($indent+1, "It is hosted on $_\n");
           $opt{recurse} and name_info($_, $indent+2);

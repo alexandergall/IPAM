@@ -52,6 +52,7 @@ sub new($$$) {
   $self->{alias_r} = IPAM::Registry->new();
   $self->{hosted_on_r} = IPAM::Registry->new();
   $self->{hosting_r} = IPAM::Registry->new();
+  $self->{derivative_r} = IPAM::Derivative::Registry->new();
   return($self);
 }
 
@@ -180,6 +181,50 @@ the host.
 sub alias_registry($) {
   my ($self) = @_;
   return($self->{alias_r});
+}
+
+=item  C<add_derivative($dervative)>
+
+  $host->add_derivative($derivative);
+
+Adds the L<IPAM::Derivative> object C<$derivative> to the list of
+derivatives associated with the host.
+
+=cut
+
+sub add_derivative($$) {
+  my ($self, $drv) = @_;
+  $self->{derivative_r}->add($drv);
+}
+
+=item C<derivatives($sorter)>
+
+  my @drvs = $host->derivatives();
+  my @drvs = $host->derivatives(sub { $_[0]->name() cmp $_[1]->name() })
+
+Returns the list of all derivatives associated with the host. An
+optional anonymous subroutine C<$sorter> will be passed to the
+C<things()> method of the derivative registry.
+
+=cut
+
+sub derivatives($$) {
+  my ($self, $sorter) = @_;
+  return($self->{derivative_r}->things($sorter));
+}
+
+=item derivative_registry($)
+
+  my $registry = $host->derivative_registry();
+
+Returns the L<IPAM::Registry> associated with the "derivative"
+registry of the host.
+
+=cut
+
+sub derivative_registry($) {
+  my ($self) = @_;
+  return($self->{derivative_r});
 }
 
 =item C<add_hosted_on($hosted_on)>

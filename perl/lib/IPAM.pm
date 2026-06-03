@@ -149,6 +149,7 @@ use IPAM::Zone;
 use IPAM::Domain;
 use IPAM::Alias;
 use IPAM::RR;
+use IPAM::Derivative;
 
 our $VERSION = '0.01';
 
@@ -162,6 +163,7 @@ use constant { REG_ZONE => 'zone',
 	       REG_ALTERNATIVE => 'alternative',
                REG_ALIAS => 'alias',
                REG_RR => 'inetnum',
+               REG_DERIVATIVE => 'derivative',
 	     };
 
 my %default_options = ( verbose => undef,
@@ -183,6 +185,8 @@ my %registries = ( IPAM::REG_ZONE => { key => 'zone_r',
                                         module => 'IPAM::Alias::Registry' },
 		   IPAM::REG_RR => { key => 'rr_r',
                                      module => 'IPAM::RR::Registry' },
+		   IPAM::REG_DERIVATIVE => { key => 'derivative_r',
+                                     module => 'IPAM::Derivative::Registry' },
 		 );
 
 my %serializer_opts = ( serializer => 'Storable' );
@@ -1069,9 +1073,43 @@ sub _process_host_node($$$$) {
                                        $self->_die_at($hosted_on_node, $@);
   }
 
+  my $replace_fn = sub {
+    my $host = $node->getAttribute('name');
+    return sub($$) {
+      my ($string, $owner) = @_;
+      $string =~ s/\$\{HOST_FQDN\}/$host_fqdn/;
+      $string =~ s/\$\{HOST\}/$host/;
+      defined $owner and $string =~ s/\$\{OWNER_FQDN\}/$owner/;
+      return $string;
+    }
+  }->();
+
   foreach my $rr_node ($node->findnodes('rr')) {
     my $type = $rr_node->getAttribute('type');
-    (my $rdata = $rr_node->textContent()) =~ s/^\s*(.*?)\s*$/$1/;
+    my ($prefix, $owner, $comment);
+    if ($prefix = $rr_node->getAttribute('prefix')) {
+      $prefix = $replace_fn->($prefix);
+      $prefix =~ /\.$/ and
+        $self->_die_at($rr_node, "FQDN not allowed as RR prefix: $prefix");
+      $owner = join('.', $prefix, $host_fqdn);
+    } elsif ($owner = $rr_node->getAttribute('owner')){
+      $owner = $self->_fqdn($replace_fn->($owner));
+    } else {
+      $owner = $host_fqdn;
+    }
+    if ($owner ne $host_fqdn) {
+      $comment = "Derived from $host_fqdn";
+      my $drv = $self->{derivative_r}->lookup($owner);
+      unless (defined $drv) {
+        $drv = IPAM::Derivative->new($rr_node, $owner);
+        $self->{derivative_r}->add($drv);
+      }
+      $drv->add_host($host);
+      unless ($host->derivative_registry()->lookup($owner)) {
+        $host->add_derivative($drv);
+      }
+    }
+    (my $rdata = $replace_fn->($rr_node->textContent(), $owner)) =~ s/^\s*(.*?)\s*$/$1/;
     my ($active, $alt, $state) = $self->_check_alternative($rr_node);
     my $rr_ttl = _ttl($rr_node, $host->ttl());
     if ($alt) {
@@ -1081,7 +1119,7 @@ sub _process_host_node($$$$) {
       defined $alt->ttl() and $rr_ttl = $alt->ttl();
     }
     ## The hosts's TTL is overriden by the RR's TTL
-    $self->{zone_r}->add_rr($host_fqdn, $rr_ttl, $type, $rdata, undef,
+    $self->{zone_r}->add_rr($owner, $rr_ttl, $type, $rdata, $comment,
 			    $host->dns && $active, IPAM::_nodeinfo($rr_node));
   }
   $self->{host_cache}{lc($host->name())} = $host;
@@ -1400,6 +1438,11 @@ sub nameinfo($$$) {
              _alternatives($self, IPAM::Alternative::MAP_ALIAS,
                            $host, $alias, { name => $alias->name }));
       }
+      foreach my $derivative
+        ($host->derivatives(sub {$_[0]->name() cmp $_[1]->name() })) {
+        push(@{$isa_host{'derivatives'}},
+             { name => $derivative->name() });
+      }
       foreach my $host ($host->hosted_on()) {
         push(@{$isa_host{'hosted-on'}}, $host->name());
       }
@@ -1416,6 +1459,12 @@ sub nameinfo($$$) {
                     $host, $host->alias_registry()->lookup($fqdn),
                     \%{$isa_alias{'canonical-name'}});
       _detail($host->alias_registry()->lookup($fqdn), \%isa_alias);
+    }
+  }
+  if ($info{derivative}) {
+    foreach my $host ($info{derivative}->hosts()) {
+      my %isa_derivative = ( 'derived-from' => $host->name() );
+      push(@{$fqdn{'is-a'}{derivative}}, \%isa_derivative);
     }
   }
   my ($zone, $rel_name) = $self->registry(IPAM::REG_ZONE)->lookup_fqdn($fqdn);
