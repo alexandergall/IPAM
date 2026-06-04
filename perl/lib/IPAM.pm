@@ -1084,7 +1084,26 @@ sub _process_host_node($$$$) {
     }
   }->();
 
-  foreach my $rr_node ($node->findnodes('rr')) {
+  foreach my $rr_or_acme_node ($node->findnodes('acme-alias'), $node->findnodes('rr')) {
+    my ($rr_node, $info_node);
+    if ($rr_or_acme_node->nodeName eq 'acme-alias') {
+      ## Syntactic sugar: synthesize a <rr> element from an acme-alias
+      ## element to cover the common case when the ACME challenge is
+      ## set up as a CNAME pointing to a dynamic zone with the FQDN of
+      ## the challenge as subdomain.
+      my $acme_node = $rr_or_acme_node;
+      $info_node = $acme_node;
+      $rr_node = XML::LibXML::Element->new('rr');
+      my $zone = $acme_node->getAttribute('zone');
+      my $ttl = $acme_node->getAttribute('ttl');
+      $rr_node->setAttribute('prefix', '_acme-challenge');
+      $rr_node->setAttribute('type', 'CNAME');
+      $ttl and $rr_node->setAttribute('ttl', $ttl);
+      $rr_node->appendText('${OWNER_FQDN}'.$self->_fqdn($zone));
+    } else {
+      $rr_node = $rr_or_acme_node;
+      $info_node = $rr_node;
+    }
     my $type = $rr_node->getAttribute('type');
     my ($prefix, $owner, $comment);
     if ($prefix = $rr_node->getAttribute('prefix')) {
@@ -1098,6 +1117,9 @@ sub _process_host_node($$$$) {
       $owner = $host_fqdn;
     }
     if ($owner ne $host_fqdn) {
+      $rr_node->hasAttribute('alternative') and die
+        $self->_die_at($rr_node, 'Alternatives are not supported for derived names ("'.
+                       $owner.'" derived from "'.$host_fqdn.'")');
       $comment = "Derived from $host_fqdn";
       my $drv = $self->{derivative_r}->lookup($owner);
       unless (defined $drv) {
@@ -1120,7 +1142,7 @@ sub _process_host_node($$$$) {
     }
     ## The hosts's TTL is overriden by the RR's TTL
     $self->{zone_r}->add_rr($owner, $rr_ttl, $type, $rdata, $comment,
-			    $host->dns && $active, IPAM::_nodeinfo($rr_node));
+			    $host->dns && $active, IPAM::_nodeinfo($info_node));
   }
   $self->{host_cache}{lc($host->name())} = $host;
 }

@@ -65,6 +65,10 @@ host = element host {
          ttl?,
          alternative?
       }* &
+      element acme-alias {
+         attribute zone { text },
+         ttl?
+      }? &
       element hosted-on {
          name,
          ttl?
